@@ -54,11 +54,26 @@ fn sortedkeys<K: Ord, V>(hm: &HashMap<K, V>) -> Vec<&K> {
   sorted
 }
 
+fn print_tokenlist<T: Display>(v: &Vec<T>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+  if !v.is_empty() {
+    write!(f, " ")?;
+    for id in v {
+      write!(f, " {id}")?;
+    }
+    writeln!(f)?;
+  }
+  Ok(())
+}
+
 impl Display for StructlikeCtor {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     for iid in sortedkeys(&self.inst2sym) {
       writeln!(f, "  {} {} = {}", self.inst2sym[iid], iid, self.insts[iid])?;
     }
+    writeln!(f, "  ---")?;
+    print_tokenlist(&self.left, f)?;
+    writeln!(f, "  ---")?;
+    print_tokenlist(&self.right, f)?;
     writeln!(f, "  ---")?;
     for connection in &self.connections {
       writeln!(f, "  {connection}")?;

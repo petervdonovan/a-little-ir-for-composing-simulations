@@ -73,7 +73,11 @@ impl<'a> Unpretty<'a> for StructlikeCtor {
     let mut inst2sym = HashMap::new();
     let mut insts = HashMap::new();
     let mut connections = Vec::new();
+    let mut left = Vec::new();
+    let mut right = Vec::new();
     let mut instantiations_section = toks.section();
+    let mut left_section = toks.section();
+    let mut right_section = toks.section();
     let mut connections_section = toks.section();
     for mut line in instantiations_section.lines() {
       let sym = line.token()?.s.to_string();
@@ -89,12 +93,20 @@ impl<'a> Unpretty<'a> for StructlikeCtor {
         }
       }
     }
+    while let Ok(inst) = InstId::unpretty(&mut left_section) {
+      left.push(inst);
+    }
+    while let Ok(inst) = InstId::unpretty(&mut right_section) {
+      right.push(inst);
+    }
     for mut line in connections_section.lines() {
       connections.push(Connection::unpretty(&mut line)?);
     }
     Ok(StructlikeCtor {
       inst2sym,
       insts,
+      left,
+      right,
       connections,
     })
   }
@@ -111,7 +123,10 @@ impl<'a> Unpretty<'a> for Program {
   fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)> {
     let mut ctor2sym = HashMap::new();
     let mut ctors = HashMap::new();
-    for mut block in toks.section().blocks() {
+    let mut binary_ctors = toks.section();
+    let mut structlike_ctors = toks.section();
+    println!("{structlike_ctors:?}");
+    for mut block in binary_ctors.blocks() {
       let mut header = block.line()?;
       let sym = header.token()?.s;
       let cid = CtorId::unpretty(&mut header)?;
@@ -119,7 +134,8 @@ impl<'a> Unpretty<'a> for Program {
       ctor2sym.insert(cid, sym.to_string());
       ctors.insert(cid, Ctor::BinaryCtor(ctor));
     }
-    for mut block in toks.section().blocks() {
+    for mut block in structlike_ctors.blocks() {
+      println!("{block:?}");
       let mut header = block.line()?;
       let sym = header.token()?.s;
       let cid = CtorId::unpretty(&mut header)?;
@@ -145,7 +161,7 @@ mod tests {
   fn round_trip<'a, T: Unpretty<'a> + Display>(s: &'a str) {
     let mut toks = TokenStream::new(s);
     let tripped = T::unpretty(&mut toks).unwrap().to_string();
-    assert_eq!(s, tripped);
+    pretty_assertions::assert_eq!(s, tripped);
     assert!(toks.token().is_err());
   }
 
@@ -187,6 +203,9 @@ mod tests {
       "  foo 1 = 0x99
   bar 6 = 0x2a
   ---
+  1 6
+  ---
+  ---
   10 1 6
   11 6 1
 ",
@@ -202,10 +221,17 @@ b 0x2 /this/is/another/path
 rtor0 0x3
   foo 89 = 0x4
   ---
+  ---
+  89
+  ---
   90 89 89
 rtor1 0x4
   baz 87 = 0x3
   bar 88 = 0x4
+  ---
+  87 88
+  ---
+  88 88
   ---
   91 88 87
   92 87 87

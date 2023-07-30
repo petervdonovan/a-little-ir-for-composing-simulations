@@ -109,13 +109,6 @@ impl<'a> TokenStream<'a> {
       }
     }
   }
-  pub fn lines<'b>(&'b mut self) -> LineIterator<'b, 'a> {
-    LineIterator { ts: self }
-  }
-
-  pub fn blocks<'b>(&'b mut self) -> BlockIterator<'b, 'a> {
-    BlockIterator { ts: self }
-  }
 
   /// Skip Unix-style lines that are entirely empty (i.e., without evenn whitespace).
   #[cfg(test)]
@@ -171,37 +164,34 @@ impl<'a> TokenStream<'a> {
   }
 }
 
-pub struct LineIterator<'b, 'a> {
-  ts: &'b mut TokenStream<'a>,
-}
-
-impl<'b, 'a> Iterator for LineIterator<'b, 'a> {
-  type Item = TokenStream<'a>;
-
-  fn next(&mut self) -> Option<Self::Item> {
-    if let Ok(line) = self.ts.line() {
-      Some(line)
-    } else {
-      None
+macro_rules! makeIterator {
+  ($structname:ident, $name: ident, $iterator_getter: ident, $result: ident) => {
+    impl<'a> TokenStream<'a> {
+      pub fn $iterator_getter<'b>(&'b mut self) -> $structname<'b, 'a> {
+        $structname { ts: self }
+      }
     }
-  }
-}
 
-pub struct BlockIterator<'b, 'a> {
-  ts: &'b mut TokenStream<'a>,
-}
-
-impl<'b, 'a> Iterator for BlockIterator<'b, 'a> {
-  type Item = TokenStream<'a>;
-
-  fn next(&mut self) -> Option<Self::Item> {
-    if let Ok(block) = self.ts.block() {
-      Some(block)
-    } else {
-      None
+    pub struct $structname<'b, 'a> {
+      ts: &'b mut TokenStream<'a>,
     }
-  }
+
+    impl<'b, 'a> Iterator for $structname<'b, 'a> {
+      type Item = $result<'a>;
+
+      fn next(&mut self) -> Option<Self::Item> {
+        if let Ok(line) = self.ts.$name() {
+          Some(line)
+        } else {
+          None
+        }
+      }
+    }
+  };
 }
+
+makeIterator!(LineIterator, line, lines, TokenStream);
+makeIterator!(BlockIterator, block, blocks, TokenStream);
 
 /// An opaque but serializable and deserializable Range object.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
@@ -233,9 +223,9 @@ mod tests {
           line0: 0,
           col0: 0,
           line1: 0,
-          col1: 4
-        }
-      })
+          col1: 4,
+        },
+      }),
     );
     assert_eq!(
       ts.token(),

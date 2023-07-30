@@ -25,6 +25,8 @@ type Sym = String;
 pub struct StructlikeCtor {
   pub inst2sym: HashMap<InstId, Sym>,
   pub insts: HashMap<InstId, CtorCall>,
+  pub left: Vec<InstId>,
+  pub right: Vec<InstId>,
   pub connections: Vec<Connection>,
 }
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]

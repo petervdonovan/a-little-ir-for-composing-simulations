@@ -44,6 +44,8 @@ pub trait Visitor {
     let StructlikeCtor {
       inst2sym,
       insts,
+      left: _,
+      right: _,
       connections,
     } = ctor;
     for (id, sym) in inst2sym {
