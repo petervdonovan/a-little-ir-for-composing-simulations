@@ -16,6 +16,7 @@ fn indentation(s: &str) -> usize {
 }
 
 impl<'a> TokenStream<'a> {
+  #[cfg(test)]
   pub fn new(s: &'a str) -> TokenStream<'a> {
     TokenStream {
       source: s,
@@ -100,7 +101,6 @@ impl<'a> TokenStream<'a> {
         Ok(ret)
       }
       (Some(split_at), _) => {
-        println!("{split_at}");
         self.source = &self.source[split_at + 1..];
         self.line += 1;
         self.col = 0;
@@ -118,6 +118,7 @@ impl<'a> TokenStream<'a> {
   }
 
   /// Skip Unix-style lines that are entirely empty (i.e., without evenn whitespace).
+  #[cfg(test)]
   pub fn skip_blank_lines(&mut self) {
     let start = *self.source.find(|it| it != '\n').get_or_insert(0);
     self.source = &self.source[start..];
@@ -179,7 +180,6 @@ impl<'b, 'a> Iterator for LineIterator<'b, 'a> {
 
   fn next(&mut self) -> Option<Self::Item> {
     if let Ok(line) = self.ts.line() {
-      println!("{line:?}");
       Some(line)
     } else {
       None
@@ -196,7 +196,6 @@ impl<'b, 'a> Iterator for BlockIterator<'b, 'a> {
 
   fn next(&mut self) -> Option<Self::Item> {
     if let Ok(block) = self.ts.block() {
-      println!("{block:?}");
       Some(block)
     } else {
       None
@@ -274,8 +273,6 @@ mod tests {
     );
     ts.skip_blank_lines();
     let mut block = ts.block().unwrap();
-    println!("\"{}\"", block.source);
-    println!("\"{}\"", ts.source);
     let mut line = block.line().unwrap();
     assert_eq!(
       line.token(),
@@ -306,7 +303,6 @@ mod tests {
     );
     line.token().unwrap();
     assert!(line.token().is_err());
-    println!("hm?");
     let next_line_in_block = block.line();
     assert!(
       next_line_in_block.is_err(),

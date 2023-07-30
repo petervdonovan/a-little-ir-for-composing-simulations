@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::ir_serializable::{
-  BinaryCtor, Connection, Ctor, CtorCall, CtorId, InstId, InstRef, Program, ReactorCtor,
+  BinaryCtor, Connection, Ctor, CtorCall, CtorId, DebugOnlyId, InstId, InstRef, Program,
+  StructlikeCtor,
 };
 use crate::lex::{Range, Token, TokenStream};
 
@@ -13,7 +14,6 @@ trait Unpretty<'a>: Sized {
 fn parse_id<Id, F: Fn(u64) -> Id>(toks: &mut TokenStream, ctor: F) -> Result<Id, (String, Range)> {
   let tok = toks.token()?;
   let parsed = if tok.s.starts_with("0x") {
-    println!("starts_with");
     u64::from_str_radix(&tok.s[2..], 16)
   } else {
     tok.s.parse::<u64>()
@@ -61,13 +61,14 @@ impl<'a> Unpretty<'a> for InstRef {
 
 impl<'a> Unpretty<'a> for Connection {
   fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)> {
+    let id = parse_id(toks, DebugOnlyId)?;
     let left = InstRef::unpretty(toks)?;
     let right = InstRef::unpretty(toks)?;
-    Ok(Connection { left, right })
+    Ok(Connection { id, left, right })
   }
 }
 
-impl<'a> Unpretty<'a> for ReactorCtor {
+impl<'a> Unpretty<'a> for StructlikeCtor {
   fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)> {
     let mut inst2sym = HashMap::new();
     let mut insts = HashMap::new();
@@ -91,7 +92,7 @@ impl<'a> Unpretty<'a> for ReactorCtor {
     for mut line in connections_section.lines() {
       connections.push(Connection::unpretty(&mut line)?);
     }
-    Ok(ReactorCtor {
+    Ok(StructlikeCtor {
       inst2sym,
       insts,
       connections,
@@ -122,9 +123,9 @@ impl<'a> Unpretty<'a> for Program {
       let mut header = block.line()?;
       let sym = header.token()?.s;
       let cid = CtorId::unpretty(&mut header)?;
-      let ctor = ReactorCtor::unpretty(&mut block)?;
+      let ctor = StructlikeCtor::unpretty(&mut block)?;
       ctor2sym.insert(cid, sym.to_string());
-      ctors.insert(cid, Ctor::ReactorCtor(ctor));
+      ctors.insert(cid, Ctor::StructlikeCtor(ctor));
     }
     let main = CtorId::unpretty(toks)?;
     Ok(Program {
@@ -177,17 +178,17 @@ mod tests {
 
   #[test]
   fn test_connection() {
-    round_trip::<Connection>("1.2.3.2 3");
+    round_trip::<Connection>("99 1.2.3.2 3");
   }
 
   #[test]
   fn test_reactorctor() {
-    round_trip::<ReactorCtor>(
+    round_trip::<StructlikeCtor>(
       "  foo 1 = 0x99
   bar 6 = 0x2a
   ---
-  1 6
-  6 1
+  10 1 6
+  11 6 1
 ",
     );
   }
@@ -201,13 +202,13 @@ b 0x2 /this/is/another/path
 rtor0 0x3
   foo 89 = 0x4
   ---
-  89 89
+  90 89 89
 rtor1 0x4
   baz 87 = 0x3
   bar 88 = 0x4
   ---
-  88 87
-  87 87
+  91 88 87
+  92 87 87
 ---
 0x3
 ",

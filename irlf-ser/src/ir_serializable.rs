@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 pub struct CtorId(pub u64);
 #[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct InstId(pub u64);
+#[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct DebugOnlyId(pub u64);
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct CtorCall {
   pub ctor: CtorId,
@@ -14,12 +16,13 @@ pub struct CtorCall {
 pub struct InstRef(pub Vec<InstId>);
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct Connection {
+  pub id: DebugOnlyId,
   pub left: InstRef,
   pub right: InstRef,
 }
 type Sym = String;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-pub struct ReactorCtor {
+pub struct StructlikeCtor {
   pub inst2sym: HashMap<InstId, Sym>,
   pub insts: HashMap<InstId, CtorCall>,
   pub connections: Vec<Connection>,
@@ -30,7 +33,7 @@ pub struct BinaryCtor {
 }
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum Ctor {
-  ReactorCtor(ReactorCtor),
+  StructlikeCtor(StructlikeCtor),
   BinaryCtor(BinaryCtor),
 }
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
