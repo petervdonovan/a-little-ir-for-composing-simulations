@@ -38,7 +38,7 @@ pub enum Ctor {
 }
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct Program {
-  pub ctor2sym: HashMap<CtorId, Sym>,
+  pub ctorid2sym: HashMap<CtorId, Sym>,
   pub ctors: HashMap<CtorId, Ctor>,
   pub main: CtorId,
 }

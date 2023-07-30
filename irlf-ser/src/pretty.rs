@@ -75,25 +75,25 @@ impl Display for BinaryCtor {
 
 impl Display for Program {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    for (cid, bc) in sortedkeys(&self.ctor2sym)
+    for (cid, bc) in sortedkeys(&self.ctorid2sym)
       .iter()
       .filter_map(|cid| match &self.ctors[cid] {
         Ctor::BinaryCtor(bc) => Some((cid, bc)),
         Ctor::StructlikeCtor(_) => None,
       })
     {
-      let sym: &str = &self.ctor2sym[cid];
+      let sym: &str = &self.ctorid2sym[cid];
       writeln!(f, "{sym} {cid} {bc}")?;
     }
     writeln!(f, "---")?;
-    for (cid, rc) in sortedkeys(&self.ctor2sym)
+    for (cid, rc) in sortedkeys(&self.ctorid2sym)
       .iter()
       .filter_map(|cid| match &self.ctors[cid] {
         Ctor::StructlikeCtor(rc) => Some((cid, rc)),
         Ctor::BinaryCtor(_) => None,
       })
     {
-      let sym: &str = &self.ctor2sym[cid];
+      let sym: &str = &self.ctorid2sym[cid];
       write!(f, "{sym} {cid}\n{rc}")?;
     }
     writeln!(f, "---")?;

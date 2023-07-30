@@ -129,7 +129,7 @@ impl<'a> Unpretty<'a> for Program {
     }
     let main = CtorId::unpretty(toks)?;
     Ok(Program {
-      ctor2sym,
+      ctorid2sym: ctor2sym,
       ctors,
       main,
     })
