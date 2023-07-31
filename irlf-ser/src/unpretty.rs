@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::ir_serializable::{
+use crate::ir::{
   BinaryCtor, Connection, Ctor, CtorCall, CtorId, DebugOnlyId, InstId, InstRef, Program,
   StructlikeCtor,
 };

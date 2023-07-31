@@ -1,4 +1,4 @@
-use crate::ir_serializable::{
+use crate::ir::{
   BinaryCtor, Connection, Ctor, CtorCall, CtorId, DebugOnlyId, InstId, InstRef, Program,
   StructlikeCtor,
 };

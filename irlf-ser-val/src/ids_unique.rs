@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use irlf_ser::ir_serializable::{Ctor, CtorId, InstId, Program};
+use irlf_ser::ir::{Ctor, CtorId, InstId, Program};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -28,5 +28,6 @@ pub fn ids_unique(p: &Program) -> Result<(), ValidationError> {
       }
     }
   }
+  todo!("connection ids");
   Ok(())
 }
