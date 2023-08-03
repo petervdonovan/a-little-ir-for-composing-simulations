@@ -28,7 +28,7 @@ pub trait Visitor<'a> {
     _: &CtorCall,
   ) {
   }
-  fn structlike_ctor_body(&mut self, id: CtorId, sctor: &StructlikeCtorBody) {}
+  fn structlike_ctor_body(&mut self, _id: CtorId, _sctor: &StructlikeCtorBody) {}
   fn structlike_ctor_body_body(&mut self, id: CtorId, sctor: &StructlikeCtorBodyBody<'a>) {
     self.children_structlike_ctor_body_body(id, sctor);
   }
@@ -74,7 +74,11 @@ pub trait Visitor<'a> {
     }
   }
   fn children_structlike_ctor_body_body(&mut self, id: CtorId, sctor: &StructlikeCtorBodyBody<'a>) {
-    let StructlikeCtorBodyBody { connections } = sctor;
+    let StructlikeCtorBodyBody {
+      left: _,
+      right: _,
+      connections,
+    } = sctor;
     for connection in connections {
       self.connection(id, connection);
     }

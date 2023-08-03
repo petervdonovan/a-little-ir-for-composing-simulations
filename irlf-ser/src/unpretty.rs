@@ -7,6 +7,15 @@ use crate::ir::{
 };
 use crate::lex::{Range, Token, TokenStream};
 
+/// Extracts a program from its pretty-printed format.
+///
+/// # Errors
+/// Returns an error result if the program does not parse.
+pub fn unpretty(s: &str) -> Result<Program, (String, Range)> {
+  let mut toks = TokenStream::new(s);
+  Program::unpretty(&mut toks)
+}
+
 trait Unpretty<'a>: Sized {
   fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)>;
 }
@@ -125,7 +134,6 @@ impl<'a> Unpretty<'a> for Program {
     let mut ctors = HashMap::new();
     let mut binary_ctors = toks.section();
     let mut structlike_ctors = toks.section();
-    println!("{structlike_ctors:?}");
     for mut block in binary_ctors.blocks() {
       let mut header = block.line()?;
       let sym = header.token()?.s;
@@ -135,7 +143,6 @@ impl<'a> Unpretty<'a> for Program {
       ctors.insert(cid, Ctor::BinaryCtor(ctor));
     }
     for mut block in structlike_ctors.blocks() {
-      println!("{block:?}");
       let mut header = block.line()?;
       let sym = header.token()?.s;
       let cid = CtorId::unpretty(&mut header)?;

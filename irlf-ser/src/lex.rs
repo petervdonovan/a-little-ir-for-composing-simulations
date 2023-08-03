@@ -16,7 +16,6 @@ fn indentation(s: &str) -> usize {
 }
 
 impl<'a> TokenStream<'a> {
-  #[cfg(test)]
   pub fn new(s: &'a str) -> TokenStream<'a> {
     TokenStream {
       source: s,

@@ -3,5 +3,6 @@
     "./irlf-ser/Cargo.toml",
     "./irlf-dat/Cargo.toml",
     "./irlf-ser-val/Cargo.toml"
-  ]
+  ],
+  "rust-analyzer.showUnlinkedFileNotification": false
 }

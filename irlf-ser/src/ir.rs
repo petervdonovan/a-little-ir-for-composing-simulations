@@ -2,6 +2,8 @@ use std::{collections::HashMap, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+pub type Iface = Vec<InstId>;
+
 #[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct CtorId(pub u64);
 #[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
@@ -20,13 +22,13 @@ pub struct Connection {
   pub left: InstRef,
   pub right: InstRef,
 }
-type Sym = String;
+pub type Sym = String;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct StructlikeCtor {
   pub inst2sym: HashMap<InstId, Sym>,
   pub insts: HashMap<InstId, CtorCall>,
-  pub left: Vec<InstId>,
-  pub right: Vec<InstId>,
+  pub left: Iface,
+  pub right: Iface,
   pub connections: Vec<Connection>,
 }
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
