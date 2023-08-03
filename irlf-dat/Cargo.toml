@@ -1,9 +1,0 @@
-[package]
-name = "irlf-dat"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-irlf-ser = { version = "0.1.0", path = "../irlf-ser" }
-thiserror = "1.0.44"
-typed-arena = "2.0.2"
