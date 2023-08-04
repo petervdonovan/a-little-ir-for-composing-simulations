@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 pub type Iface = Vec<Inst>;
 
@@ -65,4 +65,12 @@ pub struct Program {
 pub struct SourceProgram {
   #[return_ref]
   pub source: irlf_ser::ir::Program,
+}
+
+#[salsa::tracked]
+pub struct Id2Sym {
+  #[return_ref]
+  pub inst2sym: HashMap<InstId, irlf_ser::ir::Sym>,
+  #[return_ref]
+  pub ctor2sym: HashMap<CtorId, irlf_ser::ir::Sym>,
 }

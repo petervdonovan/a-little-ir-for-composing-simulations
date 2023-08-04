@@ -1,5 +1,6 @@
 mod convert;
 mod ir;
+mod unconvert;
 
 #[salsa::jar(db = Db)]
 pub struct Jar(
@@ -11,6 +12,7 @@ pub struct Jar(
   crate::ir::Connection,
   crate::convert::convert,
   crate::ir::InstRef,
+  crate::ir::Id2Sym,
 );
 
 pub trait Db: salsa::DbWithJar<Jar> {}

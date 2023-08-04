@@ -1,18 +1,49 @@
 use std::{cell::RefCell, collections::HashMap};
 
-use irlf_ser::ir::{CtorId, InstId};
+use irlf_ser::{
+  ir::{CtorId, InstId},
+  visitor::Visitor,
+};
 
 use crate::Db;
 
 #[salsa::tracked]
-pub fn convert(db: &dyn crate::Db, source: crate::ir::SourceProgram) -> crate::ir::Program {
-  let ctors = vec![];
+pub fn convert(
+  db: &dyn crate::Db,
+  source: crate::ir::SourceProgram,
+) -> (crate::ir::Program, crate::ir::Id2Sym) {
+  let mut ctors = vec![];
   let mut ctorid2ctor = HashMap::new();
   for (id, ctor) in source.source(db).ctors.iter() {
-    ctorid2ctor.insert(id, convert_ctor(db, &source.source(db).ctors, *id, ctor));
+    let ctor = convert_ctor(db, &source.source(db).ctors, *id, ctor);
+    ctorid2ctor.insert(id, ctor);
+    ctors.push(ctor);
   }
   let main = ctorid2ctor[&source.source(db).main];
-  crate::ir::Program::new(db, ctors, main)
+  let mut getids = GetIds::default();
+  getids.program(source.source(db));
+  (crate::ir::Program::new(db, ctors, main), getids.get(db))
+}
+
+#[derive(Default)]
+struct GetIds {
+  inst2sym: HashMap<InstId, irlf_ser::ir::Sym>,
+  ctor2sym: HashMap<CtorId, irlf_ser::ir::Sym>,
+}
+
+impl GetIds {
+  fn get(self, db: &dyn Db) -> crate::ir::Id2Sym {
+    crate::ir::Id2Sym::new(db, self.inst2sym, self.ctor2sym)
+  }
+}
+
+impl irlf_ser::visitor::Visitor for GetIds {
+  fn instid_sym(&mut self, id: InstId, sym: &str) {
+    self.inst2sym.insert(id, sym.to_string());
+  }
+  fn ctorid_sym(&mut self, ctorid: CtorId, sym: &str) {
+    self.ctor2sym.insert(ctorid, sym.to_string());
+  }
 }
 
 std::thread_local! {
@@ -130,4 +161,101 @@ fn convert_ctorcall(
     id,
     convert_ctor(db, ctorid2ctor, call.ctor, &ctorid2ctor[&call.ctor]),
   )
+}
+
+#[cfg(test)]
+mod test {
+  use expect_test::expect;
+  use salsa::DebugWithDb;
+
+  use super::*;
+
+  #[derive(Default)]
+  #[salsa::db(crate::Jar)]
+  pub(crate) struct TestDatabase {
+    storage: salsa::Storage<Self>,
+  }
+
+  impl salsa::Database for TestDatabase {}
+
+  #[test]
+  fn test_convert() {
+    let source = irlf_ser::unpretty::unpretty(
+      "a 0x1 /this/is/a/path
+b 0x2 /this/is/another/path
+---
+rtor0 0x3
+  foo 89 = 0x2
+  ---
+  ---
+  89
+  ---
+  90 89 89
+rtor1 0x4
+  baz 87 = 0x2
+  bar 88 = 0x3
+  ---
+  87 88
+  ---
+  88 87
+  ---
+  91 88 87
+  92 87 87
+---
+0x3
+",
+    )
+    .unwrap();
+    let db = TestDatabase::default();
+    let source = crate::ir::SourceProgram::new(&db, source);
+    let converted = convert(&db, source);
+    let actual = format!("{:#?}", converted.debug_all(&db));
+    // let expected = expect![[r#"
+    //     Program {
+    //         [salsa id]: 0,
+    //         ctors: [
+    //             BinaryCtor(
+    //                 BinaryCtor(
+    //                     Id {
+    //                         value: 1,
+    //                     },
+    //                 ),
+    //             ),
+    //             BinaryCtor(
+    //                 BinaryCtor(
+    //                     Id {
+    //                         value: 2,
+    //                     },
+    //                 ),
+    //             ),
+    //             StructlikeCtor(
+    //                 StructlikeCtor(
+    //                     Id {
+    //                         value: 1,
+    //                     },
+    //                 ),
+    //             ),
+    //             StructlikeCtor(
+    //                 StructlikeCtor(
+    //                     Id {
+    //                         value: 7,
+    //                     },
+    //                 ),
+    //             ),
+    //         ],
+    //         main: StructlikeCtor(
+    //             StructlikeCtor(
+    //                 Id {
+    //                     value: 1,
+    //                 },
+    //             ),
+    //         ),
+    //     }"#]];
+    // expected.assert_eq(&actual);
+    // if let crate::ir::Ctor::StructlikeCtor(ctor1) = converted.ctors(&db)[2] {
+    //   let actual = format!("{:?}", ctor1.debug_all(&db));
+    //   let expected = expect![[r#""#]];
+    //   expected.assert_eq(&actual);
+    // }
+  }
 }
