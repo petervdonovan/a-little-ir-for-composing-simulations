@@ -1,4 +1,6 @@
-use crate::ir::{BinaryCtor, Connection, Ctor, CtorCall, CtorId, InstId, Program, StructlikeCtor};
+use crate::ir::{
+  BinaryCtor, Connection, Ctor, CtorCall, CtorId, InstId, LibCtor, Program, StructlikeCtor,
+};
 
 pub trait Visitor {
   fn program(&mut self, p: &Program) {
@@ -10,6 +12,8 @@ pub trait Visitor {
   fn structlike_ctor(&mut self, id: CtorId, sctor: &StructlikeCtor) {
     self.children_structlike_ctor(id, sctor);
   }
+
+  fn lib_ctor(&mut self, _: CtorId, _: &LibCtor) {}
 
   fn main(&mut self, _id: CtorId) {}
 
@@ -34,6 +38,7 @@ pub trait Visitor {
       match ctor {
         Ctor::BinaryCtor(bctor) => self.binary_ctor(*id, bctor),
         Ctor::StructlikeCtor(sctor) => self.structlike_ctor(*id, sctor),
+        Ctor::LibCtor(lctor) => self.lib_ctor(*id, lctor),
       }
     }
     self.main(*main);

@@ -9,11 +9,12 @@ impl crate::ir::Ctor {
     match self {
       crate::ir::Ctor::StructlikeCtor(sctor) => sctor.id(db),
       crate::ir::Ctor::BinaryCtor(bctor) => bctor.id(db),
+      crate::ir::Ctor::LibCtor(lctor) => lctor.id(db),
     }
   }
 }
 
-fn unconvert(
+pub fn unconvert(
   db: &dyn Db,
   program: crate::ir::Program,
   id2sym: crate::ir::Id2Sym,
@@ -69,6 +70,9 @@ fn unconvert_ctor(
         path: bctor.path(db),
       })
     }
+    crate::ir::Ctor::LibCtor(lctor) => irlf_ser::ir::Ctor::LibCtor(irlf_ser::ir::LibCtor {
+      name: lctor.name(db).clone(),
+    }),
   }
 }
 
@@ -106,7 +110,9 @@ mod test {
 
   #[test]
   fn test_convert() {
-    let text = "a 0x1 /this/is/a/path
+    let text = "cmxy 0x99 times2
+---
+a 0x1 /this/is/a/path
 b 0x2 /this/is/another/path
 ---
 rtor0 0x3

@@ -87,6 +87,9 @@ fn convert_ctor(
     irlf_ser::ir::Ctor::BinaryCtor(bctor) => {
       crate::ir::Ctor::BinaryCtor(crate::ir::BinaryCtor::new(db, id, bctor.path.clone()))
     }
+    irlf_ser::ir::Ctor::LibCtor(lctor) => {
+      crate::ir::Ctor::LibCtor(crate::ir::LibCtor::new(db, id, lctor.name.clone()))
+    }
   }
 }
 
@@ -161,101 +164,4 @@ fn convert_ctorcall(
     id,
     convert_ctor(db, ctorid2ctor, call.ctor, &ctorid2ctor[&call.ctor]),
   )
-}
-
-#[cfg(test)]
-mod test {
-  use expect_test::expect;
-  use salsa::DebugWithDb;
-
-  use super::*;
-
-  #[derive(Default)]
-  #[salsa::db(crate::Jar)]
-  pub(crate) struct TestDatabase {
-    storage: salsa::Storage<Self>,
-  }
-
-  impl salsa::Database for TestDatabase {}
-
-  #[test]
-  fn test_convert() {
-    let source = irlf_ser::unpretty::unpretty(
-      "a 0x1 /this/is/a/path
-b 0x2 /this/is/another/path
----
-rtor0 0x3
-  foo 89 = 0x2
-  ---
-  ---
-  89
-  ---
-  90 89 89
-rtor1 0x4
-  baz 87 = 0x2
-  bar 88 = 0x3
-  ---
-  87 88
-  ---
-  88 87
-  ---
-  91 88 87
-  92 87 87
----
-0x3
-",
-    )
-    .unwrap();
-    let db = TestDatabase::default();
-    let source = crate::ir::SourceProgram::new(&db, source);
-    let converted = convert(&db, source);
-    let actual = format!("{:#?}", converted.debug_all(&db));
-    // let expected = expect![[r#"
-    //     Program {
-    //         [salsa id]: 0,
-    //         ctors: [
-    //             BinaryCtor(
-    //                 BinaryCtor(
-    //                     Id {
-    //                         value: 1,
-    //                     },
-    //                 ),
-    //             ),
-    //             BinaryCtor(
-    //                 BinaryCtor(
-    //                     Id {
-    //                         value: 2,
-    //                     },
-    //                 ),
-    //             ),
-    //             StructlikeCtor(
-    //                 StructlikeCtor(
-    //                     Id {
-    //                         value: 1,
-    //                     },
-    //                 ),
-    //             ),
-    //             StructlikeCtor(
-    //                 StructlikeCtor(
-    //                     Id {
-    //                         value: 7,
-    //                     },
-    //                 ),
-    //             ),
-    //         ],
-    //         main: StructlikeCtor(
-    //             StructlikeCtor(
-    //                 Id {
-    //                     value: 1,
-    //                 },
-    //             ),
-    //         ),
-    //     }"#]];
-    // expected.assert_eq(&actual);
-    // if let crate::ir::Ctor::StructlikeCtor(ctor1) = converted.ctors(&db)[2] {
-    //   let actual = format!("{:?}", ctor1.debug_all(&db));
-    //   let expected = expect![[r#""#]];
-    //   expected.assert_eq(&actual);
-    // }
-  }
 }

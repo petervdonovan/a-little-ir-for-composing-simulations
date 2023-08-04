@@ -1,5 +1,5 @@
 use crate::ir::{
-  BinaryCtor, Connection, Ctor, CtorCall, CtorId, DebugOnlyId, InstId, InstRef, Program,
+  BinaryCtor, Connection, Ctor, CtorCall, CtorId, DebugOnlyId, InstId, InstRef, LibCtor, Program,
   StructlikeCtor,
 };
 use std::{collections::HashMap, fmt::Display};
@@ -88,29 +88,43 @@ impl Display for BinaryCtor {
   }
 }
 
+impl Display for LibCtor {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.name)
+  }
+}
+
+macro_rules! visit_ctor {
+  ($self: ident, $CtorVariant: ident, $id: ident, $ctor: ident, $b: block) => {
+    for ($id, $ctor) in
+      sortedkeys(&$self.ctorid2sym)
+        .iter()
+        .filter_map(|cid| match &$self.ctors[cid] {
+          Ctor::$CtorVariant(bc) => Some((cid, bc)),
+          _ => None,
+        })
+    {
+      $b
+    }
+  };
+}
+
 impl Display for Program {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    for (cid, bc) in sortedkeys(&self.ctorid2sym)
-      .iter()
-      .filter_map(|cid| match &self.ctors[cid] {
-        Ctor::BinaryCtor(bc) => Some((cid, bc)),
-        Ctor::StructlikeCtor(_) => None,
-      })
-    {
+    visit_ctor!(self, LibCtor, cid, lctor, {
+      let sym: &str = &self.ctorid2sym[cid];
+      writeln!(f, "{sym} {cid} {lctor}")?;
+    });
+    writeln!(f, "---")?;
+    visit_ctor!(self, BinaryCtor, cid, bc, {
       let sym: &str = &self.ctorid2sym[cid];
       writeln!(f, "{sym} {cid} {bc}")?;
-    }
+    });
     writeln!(f, "---")?;
-    for (cid, rc) in sortedkeys(&self.ctorid2sym)
-      .iter()
-      .filter_map(|cid| match &self.ctors[cid] {
-        Ctor::StructlikeCtor(rc) => Some((cid, rc)),
-        Ctor::BinaryCtor(_) => None,
-      })
-    {
+    visit_ctor!(self, StructlikeCtor, cid, sctor, {
       let sym: &str = &self.ctorid2sym[cid];
-      write!(f, "{sym} {cid}\n{rc}")?;
-    }
+      write!(f, "{sym} {cid}\n{sctor}")?;
+    });
     writeln!(f, "---")?;
     writeln!(f, "{}", self.main)
   }

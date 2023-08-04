@@ -36,9 +36,14 @@ pub struct BinaryCtor {
   pub path: PathBuf,
 }
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct LibCtor {
+  pub name: String,
+}
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum Ctor {
   StructlikeCtor(StructlikeCtor),
   BinaryCtor(BinaryCtor),
+  LibCtor(LibCtor),
 }
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct Program {

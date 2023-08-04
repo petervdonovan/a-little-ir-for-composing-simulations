@@ -1,6 +1,6 @@
-mod convert;
-mod ir;
-mod unconvert;
+pub mod convert;
+pub mod ir;
+pub mod unconvert;
 
 #[salsa::jar(db = Db)]
 pub struct Jar(
@@ -8,6 +8,7 @@ pub struct Jar(
   crate::ir::Program,
   crate::ir::BinaryCtor,
   crate::ir::StructlikeCtor,
+  crate::ir::LibCtor,
   crate::ir::Inst,
   crate::ir::Connection,
   crate::convert::convert,

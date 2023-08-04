@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::ir::{
-  BinaryCtor, Connection, Ctor, CtorCall, CtorId, DebugOnlyId, InstId, InstRef, Program,
-  StructlikeCtor,
+  BinaryCtor, Connection, Ctor, CtorCall, CtorId, DebugOnlyId, InstId, InstRef, LibCtor, Program,
+  StructlikeCtor, Sym,
 };
 use crate::lex::{Range, Token, TokenStream};
 
@@ -128,28 +128,58 @@ impl<'a> Unpretty<'a> for BinaryCtor {
   }
 }
 
+impl<'a> Unpretty<'a> for LibCtor {
+  fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)> {
+    let name = toks.token()?;
+    Ok(LibCtor {
+      name: name.s.to_string(),
+    })
+  }
+}
+
+fn unpretty_ctortyp<'a, CtorTyp: Unpretty<'a>, F>(
+  ctor_ctor: F,
+  mut section: TokenStream<'a>,
+  ctor2sym: &mut HashMap<CtorId, Sym>,
+  ctors: &mut HashMap<CtorId, Ctor>,
+  big: bool,
+) -> Result<(), (String, Range)>
+where
+  F: Fn(CtorTyp) -> crate::ir::Ctor,
+{
+  for mut block in section.blocks() {
+    let mut header = block.line()?;
+    let sym = header.token()?.s;
+    let cid = CtorId::unpretty(&mut header)?;
+    let ctor = CtorTyp::unpretty(if big { &mut block } else { &mut header })?;
+    ctor2sym.insert(cid, sym.to_string());
+    ctors.insert(cid, ctor_ctor(ctor));
+  }
+  Ok(())
+}
+
 impl<'a> Unpretty<'a> for Program {
   fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)> {
     let mut ctor2sym = HashMap::new();
     let mut ctors = HashMap::new();
-    let mut binary_ctors = toks.section();
-    let mut structlike_ctors = toks.section();
-    for mut block in binary_ctors.blocks() {
-      let mut header = block.line()?;
-      let sym = header.token()?.s;
-      let cid = CtorId::unpretty(&mut header)?;
-      let ctor = BinaryCtor::unpretty(&mut header)?;
-      ctor2sym.insert(cid, sym.to_string());
-      ctors.insert(cid, Ctor::BinaryCtor(ctor));
-    }
-    for mut block in structlike_ctors.blocks() {
-      let mut header = block.line()?;
-      let sym = header.token()?.s;
-      let cid = CtorId::unpretty(&mut header)?;
-      let ctor = StructlikeCtor::unpretty(&mut block)?;
-      ctor2sym.insert(cid, sym.to_string());
-      ctors.insert(cid, Ctor::StructlikeCtor(ctor));
-    }
+    let lib_ctors = toks.section();
+    let binary_ctors = toks.section();
+    let structlike_ctors = toks.section();
+    unpretty_ctortyp(Ctor::LibCtor, lib_ctors, &mut ctor2sym, &mut ctors, false)?;
+    unpretty_ctortyp(
+      Ctor::BinaryCtor,
+      binary_ctors,
+      &mut ctor2sym,
+      &mut ctors,
+      false,
+    )?;
+    unpretty_ctortyp(
+      Ctor::StructlikeCtor,
+      structlike_ctors,
+      &mut ctor2sym,
+      &mut ctors,
+      true,
+    )?;
     let main = CtorId::unpretty(toks)?;
     Ok(Program {
       ctorid2sym: ctor2sym,
@@ -222,7 +252,9 @@ mod tests {
   #[test]
   fn test_program() {
     round_trip::<Program>(
-      "a 0x1 /this/is/a/path
+      "c 0x7 add1
+---
+a 0x1 /this/is/a/path
 b 0x2 /this/is/another/path
 ---
 rtor0 0x3
