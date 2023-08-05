@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 expect-test = "1.4.1"
 irlf-ser = { version = "0.1.0", path = "../irlf-ser" }
+lf-types = { version = "0.1.0", path = "../lf-types" }
 memoize = "0.4.0"
 pretty_assertions = "1.4.0"
 salsa = { version = "0.1.0", path = "../salsa/components/salsa-2022" }

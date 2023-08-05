@@ -1,8 +1,8 @@
 use std::{collections::HashMap, path::PathBuf};
 
-pub type Iface = Vec<Inst>;
+pub type IfaceElt = Inst;
 
-use irlf_ser::ir::{CtorId, DebugOnlyId, InstId};
+use lf_types::{CtorId, DebugOnlyId, Iface, InstId};
 
 #[salsa::interned]
 pub struct Inst {
@@ -32,9 +32,7 @@ pub struct StructlikeCtor {
   #[return_ref]
   pub insts: Vec<Inst>,
   #[return_ref]
-  pub left: Iface,
-  #[return_ref]
-  pub right: Iface,
+  pub iface: Iface<IfaceElt>,
   #[return_ref]
   pub connections: Vec<Connection>,
 }

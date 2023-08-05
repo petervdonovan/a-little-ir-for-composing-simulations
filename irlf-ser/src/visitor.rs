@@ -1,7 +1,5 @@
-use crate::ir::{
-  BinaryCtor, Connection, Ctor, CtorCall, CtorId, InstId, LibCtor, Program, StructlikeCtor,
-};
-
+use crate::ir::{BinaryCtor, Connection, Ctor, CtorCall, LibCtor, Program, StructlikeCtor};
+use lf_types::{CtorId, InstId};
 pub trait Visitor {
   fn program(&mut self, p: &Program) {
     self.children_program(p);
@@ -47,8 +45,7 @@ pub trait Visitor {
     let StructlikeCtor {
       inst2sym,
       insts,
-      left: _,
-      right: _,
+      iface: _,
       connections,
     } = ctor;
     for (id, sym) in inst2sym {

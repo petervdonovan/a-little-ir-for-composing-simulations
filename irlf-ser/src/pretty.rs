@@ -1,26 +1,7 @@
 use crate::ir::{
-  BinaryCtor, Connection, Ctor, CtorCall, CtorId, DebugOnlyId, InstId, InstRef, LibCtor, Program,
-  StructlikeCtor,
+  BinaryCtor, Connection, Ctor, CtorCall, InstRef, LibCtor, Program, StructlikeCtor,
 };
 use std::{collections::HashMap, fmt::Display};
-
-impl Display for CtorId {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "0x{:x}", self.0)
-  }
-}
-
-impl Display for InstId {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", self.0)
-  }
-}
-
-impl Display for DebugOnlyId {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "{}", self.0)
-  }
-}
 
 impl Display for CtorCall {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -71,9 +52,7 @@ impl Display for StructlikeCtor {
       writeln!(f, "  {} {} = {}", self.inst2sym[iid], iid, self.insts[iid])?;
     }
     writeln!(f, "  ---")?;
-    print_tokenlist(&self.left, f)?;
-    writeln!(f, "  ---")?;
-    print_tokenlist(&self.right, f)?;
+    print_tokenlist(&self.iface, f)?;
     writeln!(f, "  ---")?;
     for connection in &self.connections {
       writeln!(f, "  {connection}")?;

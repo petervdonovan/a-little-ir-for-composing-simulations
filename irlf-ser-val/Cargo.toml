@@ -1,8 +1,0 @@
-[package]
-name = "irlf-ser-val"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-irlf-ser = { version = "0.1.0", path = "../irlf-ser" }
-thiserror = "1.0.44"

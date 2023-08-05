@@ -7,4 +7,5 @@ edition = "2021"
 
 [dependencies]
 irlf-db = { version = "0.1.0", path = "../irlf-db" }
+lf-types = { version = "0.1.0", path = "../lf-types" }
 salsa = { version = "0.1.0", path = "../salsa/components/salsa-2022" }

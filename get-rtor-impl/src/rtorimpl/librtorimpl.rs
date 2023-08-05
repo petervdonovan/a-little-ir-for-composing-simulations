@@ -1,6 +1,6 @@
+use crate::rtor::{trivial_inputs_giver, InputsGiver, Rtor, SetPort};
+use lf_types::{Net, Side};
 use std::{any::Any, marker::PhantomData};
-
-use crate::rtor::{trivial_inputs_giver, InputsGiver, Net, Rtor, SetPort, Side};
 
 macro_rules! fun1rtor {
   ($CtorName: ident, $input_type: ident, $map: expr) => {
@@ -29,7 +29,7 @@ macro_rules! fun1rtor {
         }
       }
 
-      fn provide(&'db self, side: crate::rtor::Side) -> InputsGiver<'db> {
+      fn provide(&'db self, side: Side) -> InputsGiver<'db> {
         if let Side::Right = side {
           return Box::new(trivial_inputs_giver);
         }

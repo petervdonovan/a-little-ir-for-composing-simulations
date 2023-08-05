@@ -1,17 +1,6 @@
+use lf_types::{Net, Side};
 use std::{any::Any, marker::PhantomData};
 
-pub enum Side {
-  Left,
-  Right,
-}
-
-pub enum Nesting {
-  Up,
-  Down,
-}
-
-pub type DeltaT = Vec<u64>;
-pub type Net = DeltaT;
 pub type SetPort<'db> = Box<dyn Fn(&dyn Any) + 'db>;
 pub type ShareLevelLowerBound<'db> = Box<dyn Fn(u32) + 'db>;
 pub type Inputs<'db> = Box<dyn Iterator<Item = (SetPort<'db>, ShareLevelLowerBound<'db>)> + 'db>;

@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::ir::{
-  BinaryCtor, Connection, Ctor, CtorCall, CtorId, DebugOnlyId, InstId, InstRef, LibCtor, Program,
-  StructlikeCtor, Sym,
+  BinaryCtor, Connection, Ctor, CtorCall, IfaceElt, InstRef, LibCtor, Program, StructlikeCtor, Sym,
 };
 use crate::lex::{Range, Token, TokenStream};
+use lf_types::{CtorId, DebugOnlyId, IfaceNode, InstId, Side};
 
 /// Extracts a program from its pretty-printed format.
 ///
@@ -46,6 +46,23 @@ impl<'a> Unpretty<'a> for InstId {
   }
 }
 
+impl<'a> Unpretty<'a> for Side {
+  fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)> {
+    let tok = toks.token()?;
+    match tok.s {
+      "L" => Ok(Side::Left),
+      "R" => Ok(Side::Right),
+      _ => Err(("expected L or R".to_string(), tok.r)),
+    }
+  }
+}
+
+impl<'a> Unpretty<'a> for IfaceNode<IfaceElt> {
+  fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)> {
+    Ok(IfaceNode(Side::unpretty(toks)?, InstId::unpretty(toks)?))
+  }
+}
+
 impl<'a> Unpretty<'a> for CtorCall {
   fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)> {
     Ok(CtorCall {
@@ -82,11 +99,9 @@ impl<'a> Unpretty<'a> for StructlikeCtor {
     let mut inst2sym = HashMap::new();
     let mut insts = HashMap::new();
     let mut connections = Vec::new();
-    let mut left = Vec::new();
-    let mut right = Vec::new();
+    let mut iface = Vec::new();
     let mut instantiations_section = toks.section();
-    let mut left_section = toks.section();
-    let mut right_section = toks.section();
+    let mut iface_section = toks.section();
     let mut connections_section = toks.section();
     for mut line in instantiations_section.lines() {
       let sym = line.token()?.s.to_string();
@@ -102,11 +117,11 @@ impl<'a> Unpretty<'a> for StructlikeCtor {
         }
       }
     }
-    while let Ok(inst) = InstId::unpretty(&mut left_section) {
-      left.push(inst);
-    }
-    while let Ok(inst) = InstId::unpretty(&mut right_section) {
-      right.push(inst);
+    while !{
+      iface_section.skip_whitespace();
+      iface_section.is_empty()
+    } {
+      iface.push(IfaceNode::unpretty(&mut iface_section)?);
     }
     for mut line in connections_section.lines() {
       connections.push(Connection::unpretty(&mut line)?);
@@ -114,8 +129,7 @@ impl<'a> Unpretty<'a> for StructlikeCtor {
     Ok(StructlikeCtor {
       inst2sym,
       insts,
-      left,
-      right,
+      iface,
       connections,
     })
   }
@@ -240,8 +254,7 @@ mod tests {
       "  foo 1 = 0x99
   bar 6 = 0x2a
   ---
-  1 6
-  ---
+  R 1 R 6
   ---
   10 1 6
   11 6 1
@@ -260,17 +273,14 @@ b 0x2 /this/is/another/path
 rtor0 0x3
   foo 89 = 0x4
   ---
-  ---
-  89
+  L 89
   ---
   90 89 89
 rtor1 0x4
   baz 87 = 0x3
   bar 88 = 0x4
   ---
-  87 88
-  ---
-  88 88
+  L 87 R 88
   ---
   91 88 87
   92 87 87

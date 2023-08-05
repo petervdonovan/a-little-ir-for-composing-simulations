@@ -1,15 +1,8 @@
 use std::{collections::HashMap, path::PathBuf};
 
+use lf_types::{CtorId, DebugOnlyId, Iface, InstId};
 use serde::{Deserialize, Serialize};
-
-pub type Iface = Vec<InstId>;
-
-#[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct CtorId(pub u64);
-#[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct InstId(pub u64);
-#[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct DebugOnlyId(pub u64);
+pub type IfaceElt = InstId;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct CtorCall {
   pub ctor: CtorId,
@@ -27,8 +20,7 @@ pub type Sym = String;
 pub struct StructlikeCtor {
   pub inst2sym: HashMap<InstId, Sym>,
   pub insts: HashMap<InstId, CtorCall>,
-  pub left: Iface,
-  pub right: Iface,
+  pub iface: Iface<IfaceElt>,
   pub connections: Vec<Connection>,
 }
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]

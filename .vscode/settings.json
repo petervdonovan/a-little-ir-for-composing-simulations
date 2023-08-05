@@ -1,7 +1,7 @@
 {
   "rust-analyzer.linkedProjects": [
+    "./lf-types/Cargo.toml",
     "./irlf-ser/Cargo.toml",
-    "./irlf-ser-val/Cargo.toml",
     "./irlf-db/Cargo.toml",
     "./get-rtor-impl/Cargo.toml"
   ],

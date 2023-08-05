@@ -1,9 +1,7 @@
 use std::{cell::RefCell, collections::HashMap};
 
-use irlf_ser::{
-  ir::{CtorId, InstId},
-  visitor::Visitor,
-};
+use irlf_ser::visitor::Visitor;
+use lf_types::{CtorId, Iface, IfaceNode, InstId};
 
 use crate::Db;
 
@@ -72,15 +70,13 @@ fn convert_ctor(
   match ctor {
     irlf_ser::ir::Ctor::StructlikeCtor(sctor) => {
       let insts = convert_insts(db, ctorid2ctor, sctor);
-      let left = convert_iface(db, ctorid2ctor, &sctor.insts, &sctor.left);
-      let right = convert_iface(db, ctorid2ctor, &sctor.insts, &sctor.right);
+      let iface = convert_iface(db, ctorid2ctor, &sctor.insts, &sctor.iface);
       let connections = convert_connections(db, ctorid2ctor, &sctor.insts, &sctor.connections);
       crate::ir::Ctor::StructlikeCtor(crate::ir::StructlikeCtor::new(
         db,
         id,
         insts,
-        left,
-        right,
+        iface,
         connections,
       ))
     }
@@ -132,11 +128,16 @@ fn convert_iface(
   db: &dyn Db,
   ctorid2ctor: &HashMap<CtorId, irlf_ser::ir::Ctor>,
   instid2inst: &HashMap<InstId, irlf_ser::ir::CtorCall>,
-  iface: &irlf_ser::ir::Iface,
-) -> crate::ir::Iface {
+  iface: &Iface<irlf_ser::ir::IfaceElt>,
+) -> Iface<crate::ir::IfaceElt> {
   iface
     .iter()
-    .map(|id| convert_ctorcall(db, ctorid2ctor, *id, &instid2inst[id]))
+    .map(|node| {
+      IfaceNode(
+        node.0,
+        convert_ctorcall(db, ctorid2ctor, node.1, &instid2inst[&node.1]),
+      )
+    })
     .collect()
 }
 

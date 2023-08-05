@@ -171,6 +171,7 @@ name = "get-rtor-impl"
 version = "0.1.0"
 dependencies = [
  "irlf-db",
+ "lf-types",
  "salsa",
 ]
 
@@ -241,6 +242,7 @@ version = "0.1.0"
 dependencies = [
  "expect-test",
  "irlf-ser",
+ "lf-types",
  "memoize",
  "pretty_assertions",
  "salsa",
@@ -250,6 +252,7 @@ dependencies = [
 name = "irlf-ser"
 version = "0.1.0"
 dependencies = [
+ "lf-types",
  "pretty_assertions",
  "serde",
 ]
@@ -259,6 +262,13 @@ name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
+
+[[package]]
+name = "lf-types"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "libc"

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use irlf_ser::ir::CtorId;
+use lf_types::{CtorId, IfaceNode};
 
 use crate::Db;
 
@@ -30,7 +30,7 @@ fn unconvert_ctors(
   db: &dyn Db,
   program: &crate::ir::Program,
   id2sym: &crate::ir::Id2Sym,
-) -> HashMap<irlf_ser::ir::CtorId, irlf_ser::ir::Ctor> {
+) -> HashMap<CtorId, irlf_ser::ir::Ctor> {
   let mut acc = HashMap::new();
   for ctor in program.ctors(db) {
     acc.insert(ctor.id(db), unconvert_ctor(db, ctor, id2sym));
@@ -56,8 +56,11 @@ fn unconvert_ctor(
           .iter()
           .map(|inst| (inst.id(db), unconvert_inst(db, inst)))
           .collect(),
-        left: sctor.left(db).iter().map(|iface| iface.id(db)).collect(),
-        right: sctor.right(db).iter().map(|iface| iface.id(db)).collect(),
+        iface: sctor
+          .iface(db)
+          .iter()
+          .map(|iface| IfaceNode(iface.0, iface.1.id(db)))
+          .collect(),
         connections: sctor
           .connections(db)
           .iter()
@@ -118,17 +121,14 @@ b 0x2 /this/is/another/path
 rtor0 0x3
   foo 89 = 0x2
   ---
-  ---
-  89
+  R 89
   ---
   90 89 89
 rtor1 0x4
   baz 87 = 0x2
   bar 88 = 0x3
   ---
-  87 88
-  ---
-  88 87
+  L 87 L 88 R 88 R 87
   ---
   91 88 87
   92 87 87
