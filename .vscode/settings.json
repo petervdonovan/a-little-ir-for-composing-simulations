@@ -2,7 +2,8 @@
   "rust-analyzer.linkedProjects": [
     "./irlf-ser/Cargo.toml",
     "./irlf-ser-val/Cargo.toml",
-    "./irlf-db/Cargo.toml"
+    "./irlf-db/Cargo.toml",
+    "./get-rtor-impl/Cargo.toml"
   ],
   "rust-analyzer.showUnlinkedFileNotification": false
 }
