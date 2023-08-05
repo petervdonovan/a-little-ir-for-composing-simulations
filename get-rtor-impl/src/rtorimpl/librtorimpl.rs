@@ -10,11 +10,14 @@ macro_rules! fun1rtor {
     }
 
     impl<'db> Rtor<'db> for $CtorName<'db> {
-      fn new(_inst_time_args: Vec<&'db dyn std::any::Any>) -> Self {
-        $CtorName {
+      fn new(
+        _depth: u32,
+        _comp_time_args: Vec<&'db dyn std::any::Any>,
+      ) -> Box<dyn Fn(Vec<&'db dyn std::any::Any>) -> Self> {
+        Box::new(|_| $CtorName {
           downstream: None,
           phantom: PhantomData,
-        }
+        })
       }
 
       fn accept(&mut self, side: Side, inputs: InputsGiver<'db>) -> bool {
@@ -36,10 +39,10 @@ macro_rules! fun1rtor {
               let sth = sth.downcast_ref::<u64>().unwrap();
               #[allow(clippy::redundant_closure_call)]
               let mapped = ($map)(sth);
-              (*it)(&mapped)
+              (*it.0)(&mapped)
             };
             let b: SetPort<'db> = Box::new(mapped_it);
-            b
+            (b, it.1)
           }))
         })
       }
@@ -52,6 +55,13 @@ macro_rules! fun1rtor {
 
       fn step_up(&mut self) -> Option<Net> {
         None
+      }
+
+      fn iterate_levels(&mut self) -> bool {
+        false
+      }
+      fn levels(&self) -> Vec<u32> {
+        vec![]
       }
     }
   };

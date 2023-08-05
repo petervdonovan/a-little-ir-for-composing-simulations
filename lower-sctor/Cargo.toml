@@ -1,0 +1,7 @@
+[package]
+name = "lower-sctor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+irlf-db = { version = "0.1.0", path = "../irlf-db" }
