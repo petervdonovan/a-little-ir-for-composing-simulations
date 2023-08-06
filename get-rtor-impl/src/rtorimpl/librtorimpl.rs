@@ -2,6 +2,7 @@ use crate::rtor::{
   trivial_inputs_giver, trivial_inputs_iface_giver, InputsGiver, InputsIfaceGiver, Rtor, RtorIface,
   SetPort, ShareLevelLowerBound,
 };
+use irlf_db::ir::{Ctor, LibCtor};
 use lf_types::{Net, Side};
 use std::{any::Any, marker::PhantomData};
 
@@ -14,6 +15,15 @@ macro_rules! fun1rtor {
     struct $CtorName<'db> {
       downstream: Option<InputsGiver<'db>>,
       phantom: PhantomData<&'db u64>,
+    }
+
+    impl<'db> Default for $CtorIfaceName<'db> {
+      fn default() -> Self {
+        $CtorIfaceName {
+          downstream: None,
+          phantom: PhantomData,
+        }
+      }
     }
 
     impl<'db> Rtor<'db> for $CtorName<'db> {
@@ -54,13 +64,13 @@ macro_rules! fun1rtor {
         None
       }
     }
-    impl<'db> RtorIface<'db, $CtorName<'db>> for $CtorIfaceName<'db> {
-      fn new(_depth: u32, _comp_time_args: Vec<&'db dyn Any>) -> Self {
-        $CtorIfaceName {
-          downstream: None,
-          phantom: PhantomData,
-        }
-      }
+    impl<'db> RtorIface<'db> for $CtorIfaceName<'db> {
+      // fn new(_ctor: Ctor, _depth: u32, _comp_time_args: Vec<&'db dyn Any>) -> Self {
+      //   $CtorIfaceName {
+      //     downstream: None,
+      //     phantom: PhantomData,
+      //   }
+      // }
       fn accept(&mut self, side: Side, inputs: InputsIfaceGiver<'db>) {
         if let Side::Right = side {
           self.downstream = Some(inputs);
@@ -84,11 +94,11 @@ macro_rules! fun1rtor {
       fn levels(&self) -> Vec<u32> {
         vec![]
       }
-      fn realize(_inst_time_args: Vec<&'db dyn std::any::Any>) -> $CtorName<'db> {
-        $CtorName {
+      fn realize(&self, _inst_time_args: Vec<&'db dyn std::any::Any>) -> Box<dyn Rtor + '_> {
+        Box::new($CtorName {
           downstream: None,
           phantom: PhantomData,
-        }
+        })
       }
     }
   };
@@ -97,3 +107,12 @@ macro_rules! fun1rtor {
 fun1rtor!(Add1, Add1Iface, u64, |sth| sth + 1);
 
 fun1rtor!(Mul2, Mul2Iface, u64, |sth| sth * 2);
+
+pub fn lctor_of<'db>(db: &dyn irlf_db::Db, lctor: LibCtor) -> Box<dyn RtorIface<'db>> {
+  let add1: Box<Add1Iface<'static>> = Box::new(Add1Iface::default());
+  match lctor.name(db).as_str() {
+    "add1" => add1,
+    "mul2" => add1, // Box::new(Mul2Iface::default()),
+    _ => panic!(),
+  }
+}

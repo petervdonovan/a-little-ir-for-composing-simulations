@@ -1,3 +1,4 @@
+use irlf_db::ir::Ctor;
 use lf_types::{Net, Side};
 use std::{any::Any, marker::PhantomData};
 
@@ -44,10 +45,10 @@ pub trait Rtor<'db> {
   fn step_up(&mut self) -> Option<Net>;
 }
 
-/// An RtorIface can be instantiated by any entity that needs to know how a corresponding Rtor
-/// would behave at runtime.
-pub trait RtorIface<'db, ConcreteRtor> {
-  fn new(depth: u32, comp_time_args: Vec<&'db dyn Any>) -> Self;
+/// An RtorIface can be instantiated by any entity that needs to know how a corresponding Rtor would
+/// behave at runtime.
+pub trait RtorIface<'db> {
+  // fn new(ctor: Ctor, depth: u32, comp_time_args: Vec<&'db dyn Any>) -> Self;
   /// Accepts the input of a downstream rtor. This is used for communication between the rtoriface
   /// instances about what the levels of their corresponding reactors should be.
   fn accept(&mut self, side: Side, inputs: InputsIfaceGiver<'db>);
@@ -60,5 +61,5 @@ pub trait RtorIface<'db, ConcreteRtor> {
   /// Returns the levels of the ambient program at which this reactor's level is to be incremented.
   fn levels(&self) -> Vec<u32>;
   /// Constructs an implementation given compile time and instantiation time args.
-  fn realize(_inst_time_args: Vec<&'db dyn std::any::Any>) -> ConcreteRtor;
+  fn realize(&self, _inst_time_args: Vec<&'db dyn std::any::Any>) -> Box<dyn Rtor + '_>;
 }
