@@ -3,11 +3,11 @@ use lf_types::{Net, Side};
 use std::{any::Any, marker::PhantomData};
 
 pub type SetPort<'db> = Box<dyn Fn(&dyn Any) + 'db>;
-pub type ShareLevelLowerBound = Box<dyn Fn(u32)>;
+pub type ShareLevelLowerBound<'a> = Box<dyn Fn(u32) + 'a>;
 pub type Inputs<'a> = Box<dyn Iterator<Item = SetPort<'a>> + 'a>;
 pub type InputsGiver<'a> = Box<dyn Fn() -> Inputs<'a> + 'a>;
-pub type InputsIface = Box<dyn Iterator<Item = ShareLevelLowerBound>>;
-pub type InputsIfaceGiver = Box<dyn Fn() -> InputsIface>;
+pub type InputsIface<'a> = Box<dyn Iterator<Item = ShareLevelLowerBound<'a>> + 'a>;
+pub type InputsIfaceGiver<'a> = Box<dyn Fn() -> InputsIface<'a> + 'a>;
 
 pub struct EmptyIterator<'db, Item> {
   phantom: PhantomData<&'db Item>,
@@ -24,10 +24,11 @@ pub fn trivial_inputs_giver<'db>() -> Inputs<'db> {
     phantom: PhantomData,
   })
 }
-pub fn trivial_inputs_iface_giver<'db>() -> InputsIface {
-  Box::new(EmptyIterator {
+pub fn trivial_inputs_iface_giver<'a>() -> InputsIface<'a> {
+  let iterator = EmptyIterator::<'a, ShareLevelLowerBound<'a>> {
     phantom: PhantomData,
-  })
+  };
+  Box::new(iterator)
 }
 
 /// A runtime reactor instance.
@@ -47,13 +48,13 @@ pub trait Rtor<'db> {
 
 /// An RtorIface can be instantiated by any entity that needs to know how a corresponding Rtor would
 /// behave at runtime.
-pub trait RtorIface {
+pub trait RtorIface<'a> {
   // fn new(ctor: Ctor, depth: u32, comp_time_args: Vec<&'db dyn Any>) -> Self;
   /// Accepts the input of a downstream rtor. This is used for communication between the rtoriface
   /// instances about what the levels of their corresponding reactors should be.
-  fn accept(&mut self, side: Side, inputs: InputsIfaceGiver);
+  fn accept(&'a mut self, side: Side, inputs: InputsIfaceGiver<'a>);
   /// Provides the inputs of this rtor.
-  fn provide(&self, side: Side) -> InputsIfaceGiver;
+  fn provide(&'a self, side: Side) -> InputsIfaceGiver<'a>;
   /// Progresses the level of this and returns true if the value that would be produced by
   /// `self.levels` has changed. The correctness of this fixpointing feature is necessary for global
   /// correctness.

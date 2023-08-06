@@ -11,10 +11,10 @@ pub struct Srtor<'db> {
   downstream: Option<InputsGiver<'db>>,
 }
 
-pub struct SrtorIface {
-  downstream: Option<InputsIfaceGiver>,
+pub struct SrtorIface<'a> {
+  downstream: Option<InputsIfaceGiver<'a>>,
   ctor: StructlikeCtor,
-  children: Vec<Box<dyn RtorIface>>,
+  children: Vec<Box<dyn RtorIface<'a> + 'a>>,
 }
 
 impl<'db> Rtor<'db> for Srtor<'db> {
@@ -39,23 +39,22 @@ impl<'db> Rtor<'db> for Srtor<'db> {
   }
 }
 
-impl SrtorIface {
-  pub fn new(db: &dyn irlf_db::Db, sctor: &StructlikeCtor) -> Self {
-    let children: Vec<Box<dyn RtorIface>> = sctor
+impl<'a> SrtorIface<'a> {
+  pub fn new(db: &'a dyn irlf_db::Db, sctor: StructlikeCtor) -> Self {
+    let children: Vec<Box<dyn RtorIface<'a> + 'a>> = sctor
       .insts(db)
       .iter()
       .map(|inst| iface_of(db, inst.ctor(db)))
-      .map(|it: Box<dyn RtorIface>| it)
       .collect();
     SrtorIface {
       downstream: None,
-      ctor: sctor.clone(),
+      ctor: sctor,
       children,
     }
   }
 }
 
-impl RtorIface for SrtorIface {
+impl<'a> RtorIface<'a> for SrtorIface<'a> {
   fn accept(&mut self, side: lf_types::Side, inputs: crate::rtor::InputsIfaceGiver) {
     todo!()
   }

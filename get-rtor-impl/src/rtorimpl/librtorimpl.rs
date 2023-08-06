@@ -8,15 +8,15 @@ use std::{any::Any, marker::PhantomData};
 
 macro_rules! fun1rtor {
   ($CtorName: ident, $CtorIfaceName: ident, $input_type: ident, $map: expr) => {
-    struct $CtorIfaceName {
-      downstream: Option<InputsIfaceGiver>,
+    struct $CtorIfaceName<'a> {
+      downstream: Option<InputsIfaceGiver<'a>>,
     }
     struct $CtorName<'db> {
       downstream: Option<InputsGiver<'db>>,
       phantom: PhantomData<&'db u64>,
     }
 
-    impl Default for $CtorIfaceName {
+    impl<'a> Default for $CtorIfaceName<'a> {
       fn default() -> Self {
         $CtorIfaceName { downstream: None }
       }
@@ -60,29 +60,30 @@ macro_rules! fun1rtor {
         None
       }
     }
-    impl RtorIface for $CtorIfaceName {
+    impl<'a> RtorIface<'a> for $CtorIfaceName<'a> {
       // fn new(_ctor: Ctor, _depth: u32, _comp_time_args: Vec<&'db dyn Any>) -> Self {
       //   $CtorIfaceName {
       //     downstream: None,
       //     phantom: PhantomData,
       //   }
       // }
-      fn accept(&mut self, side: Side, inputs: InputsIfaceGiver) {
+      fn accept(&'a mut self, side: Side, inputs: InputsIfaceGiver<'a>) {
         if let Side::Right = side {
           self.downstream = Some(inputs);
         }
       }
-      fn provide(&self, side: Side) -> InputsIfaceGiver {
+      fn provide(&'a self, side: Side) -> InputsIfaceGiver<'a> {
         if let Side::Right = side {
           return Box::new(trivial_inputs_iface_giver);
         }
-        Box::new(|| {
-          Box::new((self.downstream.as_ref().unwrap())().map(|it| {
-            let mapped_it = move |sth: u32| (*it)(sth);
-            let b: ShareLevelLowerBound = Box::new(mapped_it);
-            b
-          }))
-        })
+        Box::new(|| Box::new((self.downstream.as_ref().unwrap()())))
+        // Box::new(|| {
+        //   Box::new((self.downstream.as_ref().unwrap())().map(|it| {
+        //     let mapped_it = move |sth: u32| (*it)(sth);
+        //     let b: ShareLevelLowerBound = Box::new(mapped_it);
+        //     b
+        //   }))
+        // })
       }
       fn iterate_levels(&mut self) -> bool {
         false
@@ -108,7 +109,7 @@ fun1rtor!(Add1, Add1Iface, u64, |sth| sth + 1);
 
 fun1rtor!(Mul2, Mul2Iface, u64, |sth| sth * 2);
 
-pub fn lctor_of<'db>(db: &dyn irlf_db::Db, lctor: LibCtor) -> Box<dyn RtorIface> {
+pub fn lctor_of<'db>(db: &'db dyn irlf_db::Db, lctor: LibCtor) -> Box<dyn RtorIface + 'db> {
   match lctor.name(db).as_str() {
     "add1" => Box::new(Add1Iface::default()),
     "mul2" => Box::new(Mul2Iface::default()),
