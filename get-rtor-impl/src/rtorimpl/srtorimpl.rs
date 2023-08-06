@@ -11,10 +11,10 @@ pub struct Srtor<'db> {
   downstream: Option<InputsGiver<'db>>,
 }
 
-pub struct SrtorIface<'db> {
-  downstream: Option<InputsIfaceGiver<'db>>,
+pub struct SrtorIface {
+  downstream: Option<InputsIfaceGiver>,
   ctor: StructlikeCtor,
-  children: Vec<Box<dyn RtorIface<'db>>>,
+  children: Vec<Box<dyn RtorIface>>,
 }
 
 impl<'db> Rtor<'db> for Srtor<'db> {
@@ -39,12 +39,13 @@ impl<'db> Rtor<'db> for Srtor<'db> {
   }
 }
 
-impl<'db> SrtorIface<'db> {
+impl SrtorIface {
   pub fn new(db: &dyn irlf_db::Db, sctor: &StructlikeCtor) -> Self {
-    let children = sctor
+    let children: Vec<Box<dyn RtorIface>> = sctor
       .insts(db)
       .iter()
       .map(|inst| iface_of(db, inst.ctor(db)))
+      .map(|it: Box<dyn RtorIface>| it)
       .collect();
     SrtorIface {
       downstream: None,
@@ -54,12 +55,12 @@ impl<'db> SrtorIface<'db> {
   }
 }
 
-impl<'db> RtorIface<'db> for SrtorIface<'db> {
-  fn accept(&mut self, side: lf_types::Side, inputs: crate::rtor::InputsIfaceGiver<'db>) {
+impl RtorIface for SrtorIface {
+  fn accept(&mut self, side: lf_types::Side, inputs: crate::rtor::InputsIfaceGiver) {
     todo!()
   }
 
-  fn provide(&'db self, side: lf_types::Side) -> crate::rtor::InputsIfaceGiver<'db> {
+  fn provide(&self, side: lf_types::Side) -> crate::rtor::InputsIfaceGiver {
     todo!()
   }
 
@@ -71,7 +72,7 @@ impl<'db> RtorIface<'db> for SrtorIface<'db> {
     todo!()
   }
 
-  fn realize(&self, _inst_time_args: Vec<&'db dyn std::any::Any>) -> Box<dyn Rtor> {
+  fn realize<'db>(&self, _inst_time_args: Vec<&'db dyn std::any::Any>) -> Box<dyn Rtor<'db> + 'db> {
     todo!()
   }
 }
