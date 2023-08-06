@@ -28,7 +28,6 @@ pub struct Connection {
 #[salsa::interned]
 pub struct StructlikeCtor {
   pub id: CtorId,
-  // pub inst2sym: HashMap<InstId, Sym>,
   #[return_ref]
   pub insts: Vec<Inst>,
   #[return_ref]
@@ -61,7 +60,6 @@ pub enum Ctor {
 
 #[salsa::tracked]
 pub struct Program {
-  // pub ctorid2sym: HashMap<CtorId, Sym>,
   #[return_ref]
   pub ctors: Vec<Ctor>,
   #[return_ref]
