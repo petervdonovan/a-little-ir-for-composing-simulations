@@ -1,16 +1,26 @@
-use irlf_db::ir::Ctor;
+use dyn_clone::DynClone;
 use lf_types::{Net, Side};
 use std::{any::Any, marker::PhantomData};
-
+pub trait InputsIfaceIterator<'a>:
+  Iterator<Item = ShareLevelLowerBound<'a>> + 'a + DynClone
+{
+}
+dyn_clone::clone_trait_object!(InputsIfaceIterator<'_>);
 pub type SetPort<'db> = Box<dyn Fn(&dyn Any) + 'db>;
 pub type ShareLevelLowerBound<'a> = Box<dyn Fn(u32) + 'a>;
 pub type Inputs<'a> = Box<dyn Iterator<Item = SetPort<'a>> + 'a>;
 pub type InputsGiver<'a> = Box<dyn Fn() -> Inputs<'a> + 'a>;
-pub type InputsIface<'a> = Box<dyn Iterator<Item = ShareLevelLowerBound<'a>> + 'a>;
-pub type InputsIfaceGiver<'a> = Box<dyn Fn() -> InputsIface<'a> + 'a>;
+pub type InputsIface<'a> = Box<dyn InputsIfaceIterator<'a>>;
 
 pub struct EmptyIterator<'db, Item> {
   phantom: PhantomData<&'db Item>,
+}
+impl<'db, Item> Clone for EmptyIterator<'db, Item> {
+  fn clone(&self) -> Self {
+    EmptyIterator {
+      phantom: PhantomData,
+    }
+  }
 }
 impl<'db, Item> Iterator for EmptyIterator<'db, Item> {
   type Item = Item;
@@ -19,6 +29,8 @@ impl<'db, Item> Iterator for EmptyIterator<'db, Item> {
     None
   }
 }
+// impl<'a, Item> BoxClone for EmptyIterator<'a, Item> {}
+impl<'a> InputsIfaceIterator<'a> for EmptyIterator<'a, ShareLevelLowerBound<'a>> {}
 pub fn trivial_inputs_giver<'db>() -> Inputs<'db> {
   Box::new(EmptyIterator {
     phantom: PhantomData,
@@ -52,9 +64,9 @@ pub trait RtorIface<'a> {
   // fn new(ctor: Ctor, depth: u32, comp_time_args: Vec<&'db dyn Any>) -> Self;
   /// Accepts the input of a downstream rtor. This is used for communication between the rtoriface
   /// instances about what the levels of their corresponding reactors should be.
-  fn accept(&'a mut self, side: Side, inputs: InputsIfaceGiver<'a>);
+  fn accept(&'a mut self, side: Side, inputs: InputsIface<'a>);
   /// Provides the inputs of this rtor.
-  fn provide(&'a self, side: Side) -> InputsIfaceGiver<'a>;
+  fn provide(&'a self, side: Side) -> InputsIface<'a>;
   /// Progresses the level of this and returns true if the value that would be produced by
   /// `self.levels` has changed. The correctness of this fixpointing feature is necessary for global
   /// correctness.

@@ -1,15 +1,15 @@
 use crate::rtor::{
-  trivial_inputs_giver, trivial_inputs_iface_giver, InputsGiver, InputsIfaceGiver, Rtor, RtorIface,
-  SetPort, ShareLevelLowerBound,
+  trivial_inputs_giver, trivial_inputs_iface_giver, InputsGiver, InputsIface, Rtor, RtorIface,
+  SetPort,
 };
-use irlf_db::ir::{Ctor, LibCtor};
+use irlf_db::ir::LibCtor;
 use lf_types::{Net, Side};
 use std::{any::Any, marker::PhantomData};
 
 macro_rules! fun1rtor {
   ($CtorName: ident, $CtorIfaceName: ident, $input_type: ident, $map: expr) => {
     struct $CtorIfaceName<'a> {
-      downstream: Option<InputsIfaceGiver<'a>>,
+      downstream: Option<InputsIface<'a>>,
     }
     struct $CtorName<'db> {
       downstream: Option<InputsGiver<'db>>,
@@ -67,29 +67,25 @@ macro_rules! fun1rtor {
       //     phantom: PhantomData,
       //   }
       // }
-      fn accept(&'a mut self, side: Side, inputs: InputsIfaceGiver<'a>) {
+      fn accept(&'a mut self, side: Side, inputs: InputsIface<'a>) {
         if let Side::Right = side {
           self.downstream = Some(inputs);
         }
       }
-      fn provide(&'a self, side: Side) -> InputsIfaceGiver<'a> {
+      fn provide(&'a self, side: Side) -> InputsIface<'a> {
         if let Side::Right = side {
-          return Box::new(trivial_inputs_iface_giver);
+          trivial_inputs_iface_giver()
+        } else {
+          let ret: &InputsIface<'a> = self.downstream.as_ref().unwrap();
+          let ret: InputsIface<'a> = (*ret).clone();
+          ret
         }
-        Box::new(|| Box::new((self.downstream.as_ref().unwrap()())))
-        // Box::new(|| {
-        //   Box::new((self.downstream.as_ref().unwrap())().map(|it| {
-        //     let mapped_it = move |sth: u32| (*it)(sth);
-        //     let b: ShareLevelLowerBound = Box::new(mapped_it);
-        //     b
-        //   }))
-        // })
       }
       fn iterate_levels(&mut self) -> bool {
         false
       }
       fn levels(&self) -> Vec<u32> {
-        vec![]
+        vec![] // never notify; fn-like rtors react immediately
       }
       // fn realize<'db>(&self, _inst_time_args: Vec<&'db dyn std::any::Any>) -> Box<dyn Rtor + 'db> {
       fn realize<'db>(
@@ -111,8 +107,8 @@ fun1rtor!(Mul2, Mul2Iface, u64, |sth| sth * 2);
 
 pub fn lctor_of<'db>(db: &'db dyn irlf_db::Db, lctor: LibCtor) -> Box<dyn RtorIface + 'db> {
   match lctor.name(db).as_str() {
-    "add1" => Box::new(Add1Iface::default()),
-    "mul2" => Box::new(Mul2Iface::default()),
+    "add1" => Box::<Add1Iface<'_>>::default(),
+    "mul2" => Box::<Mul2Iface<'_>>::default(),
     _ => panic!(),
   }
 }

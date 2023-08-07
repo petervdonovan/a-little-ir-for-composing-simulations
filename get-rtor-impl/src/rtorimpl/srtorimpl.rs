@@ -1,9 +1,6 @@
-use irlf_db::ir::{Ctor, StructlikeCtor};
+use irlf_db::ir::StructlikeCtor;
 
-use crate::{
-  rtor::{InputsGiver, InputsIfaceGiver, Rtor, RtorIface},
-  Db,
-};
+use crate::rtor::{InputsGiver, InputsIface, Rtor, RtorIface};
 
 use super::iface_of;
 
@@ -12,7 +9,7 @@ pub struct Srtor<'db> {
 }
 
 pub struct SrtorIface<'a> {
-  downstream: Option<InputsIfaceGiver<'a>>,
+  downstream: Option<InputsIface<'a>>,
   ctor: StructlikeCtor,
   children: Vec<Box<dyn RtorIface<'a> + 'a>>,
 }
@@ -55,11 +52,11 @@ impl<'a> SrtorIface<'a> {
 }
 
 impl<'a> RtorIface<'a> for SrtorIface<'a> {
-  fn accept(&mut self, side: lf_types::Side, inputs: crate::rtor::InputsIfaceGiver) {
+  fn accept(&'a mut self, side: lf_types::Side, inputs: crate::rtor::InputsIface<'a>) {
     todo!()
   }
 
-  fn provide(&self, side: lf_types::Side) -> crate::rtor::InputsIfaceGiver {
+  fn provide(&'a self, side: lf_types::Side) -> crate::rtor::InputsIface<'a> {
     todo!()
   }
 
