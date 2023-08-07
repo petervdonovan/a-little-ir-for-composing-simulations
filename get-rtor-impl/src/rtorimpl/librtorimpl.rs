@@ -1,10 +1,16 @@
 use crate::rtor::{
-  trivial_inputs_giver, trivial_inputs_iface_giver, InputsGiver, InputsIface, Rtor, RtorIface,
-  SetPort,
+  trivial_inputs_giver, trivial_inputs_iface_giver, InputsGiver, InputsIface, InputsIfaceIterator,
+  Rtor, RtorIface, SetPort, ShareLevelLowerBound,
 };
+use crate::rtorimpl::lazyclone::LazyIterClone;
 use irlf_db::ir::LibCtor;
 use lf_types::{Net, Side};
 use std::{any::Any, marker::PhantomData};
+
+impl<'a> InputsIfaceIterator<'a>
+  for LazyIterClone<'a, ShareLevelLowerBound<'a>, dyn InputsIfaceIterator<'a>>
+{
+}
 
 macro_rules! fun1rtor {
   ($CtorName: ident, $CtorIfaceName: ident, $input_type: ident, $map: expr) => {
@@ -76,9 +82,7 @@ macro_rules! fun1rtor {
         if let Side::Right = side {
           trivial_inputs_iface_giver()
         } else {
-          let ret: &InputsIface<'a> = self.downstream.as_ref().unwrap();
-          let ret: InputsIface<'a> = (*ret).clone();
-          ret
+          Box::new(LazyIterClone::new(&self.downstream))
         }
       }
       fn iterate_levels(&mut self) -> bool {

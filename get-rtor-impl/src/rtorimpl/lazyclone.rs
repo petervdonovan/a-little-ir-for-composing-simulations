@@ -1,15 +1,15 @@
-pub struct LazyIterClone<'a, Item, CloneIterator: Iterator<Item = Item>>
+pub struct LazyIterClone<'a, Item, CloneIterator: Iterator<Item = Item> + ?Sized>
 where
   Box<CloneIterator>: Clone,
 {
   backing_iter: &'a Option<Box<CloneIterator>>,
   backing_iter_clone: Option<Box<CloneIterator>>,
 }
-impl<'a, Item, CloneIterator: Iterator<Item = Item>> LazyIterClone<'a, Item, CloneIterator>
+impl<'a, Item, CloneIterator: Iterator<Item = Item> + ?Sized> LazyIterClone<'a, Item, CloneIterator>
 where
   Box<CloneIterator>: Clone,
 {
-  fn new(source: &'a Option<Box<CloneIterator>>) -> Self {
+  pub fn new(source: &'a Option<Box<CloneIterator>>) -> Self {
     LazyIterClone {
       backing_iter: source,
       backing_iter_clone: None,
@@ -17,7 +17,21 @@ where
   }
 }
 
-impl<'a, Item, CloneIterator: Iterator<Item = Item>> Iterator
+impl<'a, Item, CloneIterator: Iterator<Item = Item> + ?Sized> Clone
+  for LazyIterClone<'a, Item, CloneIterator>
+where
+  Box<CloneIterator>: Clone,
+{
+  fn clone(&self) -> Self {
+    let backing = self.backing_iter;
+    LazyIterClone {
+      backing_iter: self.backing_iter,
+      backing_iter_clone: None,
+    }
+  }
+}
+
+impl<'a, Item, CloneIterator: Iterator<Item = Item> + ?Sized> Iterator
   for LazyIterClone<'a, Item, CloneIterator>
 where
   Box<CloneIterator>: Clone,
