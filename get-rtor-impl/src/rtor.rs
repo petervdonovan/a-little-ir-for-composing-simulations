@@ -64,7 +64,7 @@ pub trait RtorIface<'a> {
   // fn new(ctor: Ctor, depth: u32, comp_time_args: Vec<&'db dyn Any>) -> Self;
   /// Accepts the input of a downstream rtor. This is used for communication between the rtoriface
   /// instances about what the levels of their corresponding reactors should be.
-  fn accept(&'a mut self, side: Side, inputs: InputsIface<'a>);
+  fn accept(&mut self, side: Side, inputs: &mut InputsIface<'a>);
   /// Provides the inputs of this rtor.
   fn provide(&'a self, side: Side) -> InputsIface<'a>;
   /// Progresses the level of this and returns true if the value that would be produced by

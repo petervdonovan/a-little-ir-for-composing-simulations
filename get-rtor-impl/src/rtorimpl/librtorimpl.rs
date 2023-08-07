@@ -73,9 +73,10 @@ macro_rules! fun1rtor {
       //     phantom: PhantomData,
       //   }
       // }
-      fn accept(&'a mut self, side: Side, inputs: InputsIface<'a>) {
+      fn accept(&mut self, side: Side, inputs: &mut InputsIface<'a>) {
         if let Side::Right = side {
-          self.downstream = Some(inputs);
+          self.downstream = Some(inputs.clone());
+          inputs.next(); // ! This assumes that the width of self is 1 !
         }
       }
       fn provide(&'a self, side: Side) -> InputsIface<'a> {

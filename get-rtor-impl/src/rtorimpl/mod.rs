@@ -1,3 +1,4 @@
+mod chainclone;
 mod lazyclone;
 mod librtorimpl;
 mod srtorimpl;
