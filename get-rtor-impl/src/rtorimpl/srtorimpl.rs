@@ -6,11 +6,13 @@ use irlf_db::{
 };
 use lf_types::Side;
 
-use crate::rtor::{
-  InputsGiver, InputsIface, InputsIfaceIterator, Rtor, RtorIface, ShareLevelLowerBound,
+use crate::{
+  iterators::cloneiterator::CloneIterator,
+  rtor::{InputsGiver, InputsIface, Rtor, RtorIface, ShareLevelLowerBound},
 };
 
-use super::{chainclone::ChainClone, iface_of};
+use super::iface_of;
+use crate::iterators::chainclone::ChainClone;
 
 pub struct Srtor<'db> {
   downstream: Option<InputsGiver<'db>>,
@@ -18,10 +20,11 @@ pub struct Srtor<'db> {
 
 pub struct SrtorIface<'a> {
   db: &'a dyn Db,
-  ldownstream: Option<InputsIface<'a>>,
-  rdownstream: Option<InputsIface<'a>>,
+  ldownstream: Option<InputsIface>,
+  rdownstream: Option<InputsIface>,
   ctor: StructlikeCtor,
   children: HashMap<Inst, Box<dyn RtorIface<'a> + 'a>>,
+  levels_internal2external: HashMap<u32, u32>,
 }
 
 struct SideIterator<'a> {
@@ -56,7 +59,7 @@ impl<'a> Iterator for SideIterator<'a> {
 }
 
 impl<'a> SrtorIface<'a> {
-  fn downstream(&mut self, side: Side) -> &mut Option<InputsIface<'a>> {
+  fn downstream(&mut self, side: Side) -> &mut Option<InputsIface> {
     match side {
       Side::Left => &mut self.ldownstream,
       Side::Right => &mut self.rdownstream,
@@ -103,32 +106,36 @@ impl<'a> SrtorIface<'a> {
       rdownstream: None,
       ctor: sctor,
       children,
-    }
+      levels_internal2external: HashMap::new(),
+    };
+    todo!("initialize levels_internal2external?")
   }
-}
-
-impl<'a> InputsIfaceIterator<'a>
-  for ChainClone<ShareLevelLowerBound<'a>, dyn InputsIfaceIterator<'a>>
-{
 }
 
 impl<'a> RtorIface<'a> for SrtorIface<'a> {
-  fn accept(&mut self, side: lf_types::Side, inputs: &mut crate::rtor::InputsIface<'a>) {
+  fn accept(&mut self, part: &[Inst], side: lf_types::Side, inputs: &mut crate::rtor::InputsIface) {
+    // FIXME: this is all wrong
     *self.downstream(side) = Some(inputs.clone());
     for child in iface(self.ctor, self.db, side) {
-      self.children.get_mut(&child).unwrap().accept(side, inputs);
+      self
+        .children
+        .get_mut(&child)
+        .unwrap()
+        .accept(&part[1..], side, inputs);
     }
   }
 
-  fn provide(&'a self, side: lf_types::Side) -> crate::rtor::InputsIface<'a> {
+  fn provide(&'a self, part: &[Inst], side: lf_types::Side) -> crate::rtor::InputsIface {
+    // FIXME: this is all wrong
     let mut sub_iterators = vec![];
     for child in iface(self.ctor, self.db, side) {
-      sub_iterators.push(self.children[&child].provide(side));
+      sub_iterators.push(self.children[&child].provide(&part[1..], side));
     }
     Box::new(ChainClone::new(sub_iterators))
   }
 
   fn iterate_levels(&mut self) -> bool {
+    // FIXME: this is all wrong
     let mut changed = false;
     for (_, child) in self.children.iter_mut() {
       changed |= child.iterate_levels();
@@ -137,6 +144,14 @@ impl<'a> RtorIface<'a> for SrtorIface<'a> {
   }
 
   fn levels(&self) -> Vec<u32> {
+    todo!()
+  }
+
+  fn in_levels(&self) -> Box<dyn crate::rtor::LevelIterator> {
+    todo!()
+  }
+
+  fn out_levels(&self) -> Box<dyn crate::rtor::LevelIterator> {
     todo!()
   }
 

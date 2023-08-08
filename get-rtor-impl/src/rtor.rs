@@ -1,16 +1,24 @@
 use dyn_clone::DynClone;
+use irlf_db::ir::Inst;
 use lf_types::{Net, Side};
-use std::{any::Any, marker::PhantomData};
-pub trait InputsIfaceIterator<'a>:
-  Iterator<Item = ShareLevelLowerBound<'a>> + 'a + DynClone
-{
-}
-dyn_clone::clone_trait_object!(InputsIfaceIterator<'_>);
+use std::{any::Any, marker::PhantomData, rc::Rc};
+
+use crate::iterators::cloneiterator::CloneIterator;
+// pub trait InputsIfaceIterator<'a>:
+//   Iterator<Item = ShareLevelLowerBound<'a>> + 'a + DynClone
+// {
+// }
+// dyn_clone::clone_trait_object!(InputsIfaceIterator<'_>);
+// impl<'a> InputsIfaceIterator<'a> for dyn CloneIterator<ShareLevelLowerBound<'a>> {}
 pub type SetPort<'db> = Box<dyn Fn(&dyn Any) + 'db>;
-pub type ShareLevelLowerBound<'a> = Box<dyn Fn(u32) + 'a>;
 pub type Inputs<'a> = Box<dyn Iterator<Item = SetPort<'a>> + 'a>;
 pub type InputsGiver<'a> = Box<dyn Fn() -> Inputs<'a> + 'a>;
-pub type InputsIface<'a> = Box<dyn InputsIfaceIterator<'a>>;
+
+pub type ShareLevelLowerBound = Rc<dyn Fn(u32)>;
+dyn_clone::clone_trait_object!(CloneIterator<ShareLevelLowerBound>);
+pub type InputsIface = Box<dyn CloneIterator<ShareLevelLowerBound>>;
+
+pub trait LevelIterator: Iterator<Item = u32> + DynClone {}
 
 pub struct EmptyIterator<'db, Item> {
   phantom: PhantomData<&'db Item>,
@@ -30,14 +38,14 @@ impl<'db, Item> Iterator for EmptyIterator<'db, Item> {
   }
 }
 // impl<'a, Item> BoxClone for EmptyIterator<'a, Item> {}
-impl<'a> InputsIfaceIterator<'a> for EmptyIterator<'a, ShareLevelLowerBound<'a>> {}
+// impl<'a> CloneIterator<ShareLevelLowerBound<'a>> for EmptyIterator<'a, ShareLevelLowerBound<'a>> {}
 pub fn trivial_inputs_giver<'db>() -> Inputs<'db> {
   Box::new(EmptyIterator {
     phantom: PhantomData,
   })
 }
-pub fn trivial_inputs_iface_giver<'a>() -> InputsIface<'a> {
-  let iterator = EmptyIterator::<'a, ShareLevelLowerBound<'a>> {
+pub fn trivial_inputs_iface_giver() -> InputsIface {
+  let iterator = EmptyIterator::<ShareLevelLowerBound> {
     phantom: PhantomData,
   };
   Box::new(iterator)
@@ -64,15 +72,20 @@ pub trait RtorIface<'a> {
   // fn new(ctor: Ctor, depth: u32, comp_time_args: Vec<&'db dyn Any>) -> Self;
   /// Accepts the input of a downstream rtor. This is used for communication between the rtoriface
   /// instances about what the levels of their corresponding reactors should be.
-  fn accept(&mut self, side: Side, inputs: &mut InputsIface<'a>);
+  fn accept(&mut self, part: &[Inst], side: Side, inputs: &mut InputsIface);
   /// Provides the inputs of this rtor.
-  fn provide(&'a self, side: Side) -> InputsIface<'a>;
+  fn provide(&'a self, part: &[Inst], side: Side) -> InputsIface;
   /// Progresses the level of this and returns true if the value that would be produced by
   /// `self.levels` has changed. The correctness of this fixpointing feature is necessary for global
   /// correctness.
   fn iterate_levels(&mut self) -> bool;
-  /// Returns the levels of the ambient program at which this reactor's level is to be incremented.
+  /// Returns the levels of the ambient program at which this reactor's local level is to be
+  /// incremented.
   fn levels(&self) -> Vec<u32>;
+  /// Returns the levels of the inputs of self in order.
+  fn in_levels(&self) -> Box<dyn LevelIterator>;
+  /// Returns the levels of the outputs of self in order.
+  fn out_levels(&self) -> Box<dyn LevelIterator>;
   /// Constructs an implementation given compile time and instantiation time args.
   fn realize<'db>(&self, _inst_time_args: Vec<&'db dyn std::any::Any>) -> Box<dyn Rtor<'db> + 'db>;
 }
