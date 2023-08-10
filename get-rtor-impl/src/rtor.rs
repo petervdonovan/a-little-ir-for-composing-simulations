@@ -1,6 +1,6 @@
 use dyn_clone::DynClone;
 use irlf_db::ir::Inst;
-use lf_types::{Net, Side};
+use lf_types::{Level, Net, Side};
 use std::{any::Any, marker::PhantomData, rc::Rc};
 
 use crate::iterators::cloneiterator::CloneIterator;
@@ -14,11 +14,13 @@ pub type SetPort<'db> = Box<dyn Fn(&dyn Any) + 'db>;
 pub type Inputs<'a> = Box<dyn Iterator<Item = SetPort<'a>> + 'a>;
 pub type InputsGiver<'a> = Box<dyn Fn() -> Inputs<'a> + 'a>;
 
-pub type ShareLevelLowerBound = Rc<dyn Fn(u32)>;
+pub type ShareLevelLowerBound = Rc<dyn Fn(Level)>;
 dyn_clone::clone_trait_object!(CloneIterator<ShareLevelLowerBound>);
+dyn_clone::clone_trait_object!(CloneIterator<Level>);
 pub type InputsIface = Box<dyn CloneIterator<ShareLevelLowerBound>>;
 
-pub trait LevelIterator: Iterator<Item = u32> + DynClone {}
+pub type LevelIterator = Box<dyn CloneIterator<Level>>;
+// pub trait LevelIterator: Iterator<Item = Level> + DynClone {}
 
 pub struct EmptyIterator<'db, Item> {
   phantom: PhantomData<&'db Item>,
@@ -66,26 +68,56 @@ pub trait Rtor<'db> {
   fn step_up(&mut self) -> Option<Net>;
 }
 
-/// An RtorIface can be instantiated by any entity that needs to know how a corresponding Rtor would
-/// behave at runtime.
-pub trait RtorIface<'a> {
-  // fn new(ctor: Ctor, depth: u32, comp_time_args: Vec<&'db dyn Any>) -> Self;
-  /// Accepts the input of a downstream rtor. This is used for communication between the rtoriface
-  /// instances about what the levels of their corresponding reactors should be.
-  fn accept(&mut self, part: &[Inst], side: Side, inputs: &mut InputsIface);
-  /// Provides the inputs of this rtor.
-  fn provide(&'a self, part: &[Inst], side: Side) -> InputsIface;
+/// A potentially mutable compile-time model of a runtime `Rtor`.
+///
+/// `RtorComptime` instances **should not** instantiate `RtorComptime`s.
+pub trait RtorComptime {
   /// Progresses the level of this and returns true if the value that would be produced by
   /// `self.levels` has changed. The correctness of this fixpointing feature is necessary for global
   /// correctness.
   fn iterate_levels(&mut self) -> bool;
   /// Returns the levels of the ambient program at which this reactor's local level is to be
   /// incremented.
-  fn levels(&self) -> Vec<u32>;
-  /// Returns the levels of the inputs of self in order.
-  fn in_levels(&self) -> Box<dyn LevelIterator>;
-  /// Returns the levels of the outputs of self in order.
-  fn out_levels(&self) -> Box<dyn LevelIterator>;
+  fn levels(&self) -> Vec<Level>;
+  /// Accepts the input of a downstream rtor. This is used for communication between the rtoriface
+  /// instances about what the levels of their corresponding reactors should be.
+  fn accept(&mut self, part: &[Inst], side: Side, inputs: &mut InputsIface);
+  /// Provides the inputs of this rtor.
+  fn provide(&self, part: &[Inst], side: Side) -> InputsIface;
+}
+
+/// An RtorIface can be instantiated by any entity that needs to know how a corresponding Rtor would
+/// behave at runtime.
+///
+/// Implementors **should not** be mutable, i.e., they should not have cells nor should they be
+/// designed for modification after initialization.
+pub trait RtorIface {
+  /// The number of distinct levels required to model an instance of this rtor as a black box. This
+  /// should be finite and trivial to compute.
+  fn n_levels(&self) -> u32;
+  /// If a level $n$ of an input provider receives from an output of self of level $k$, where $k$ is
+  /// given with respect to the ambient level assignment of the immediately containing rtor of self,
+  /// then invoke the impure function `f` on $(n, k)$. `f` should be idempotent in the sense that
+  /// invoking `f` multiple times on the same arguments should have the same effect as invoking `f`
+  /// once on those arguments.
+  ///
+  /// Unlike `accept`, this function realizes effects on objects reachable from the closure of `f`
+  /// rather than realizing effects on `self`.
+  ///
+  /// This function can be called by accept, but it should not call accept.
+  fn immut_accept(
+    &self,
+    part: &[Inst],
+    side: Side,
+    provided_levels: &mut LevelIterator,
+    f: Rc<dyn Fn(Level, Level)>,
+  );
+  /// Returns the levels of the inputs of self.
+  ///
+  /// This function can be called by provide, but it should not call provide.
+  fn immut_provide(&self, part: &[Inst], side: Side, starting_level: Level) -> LevelIterator;
+  /// Produces an instance of the RtorComptime associated with this.
+  fn comptime_realize(&self) -> Box<dyn RtorComptime>;
   /// Constructs an implementation given compile time and instantiation time args.
   fn realize<'db>(&self, _inst_time_args: Vec<&'db dyn std::any::Any>) -> Box<dyn Rtor<'db> + 'db>;
 }

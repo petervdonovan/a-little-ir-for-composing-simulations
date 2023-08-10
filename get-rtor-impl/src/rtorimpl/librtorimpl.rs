@@ -1,23 +1,21 @@
-use crate::iterators::cloneiterator::{map, CloneIterator};
+use crate::iterators::cloneiterator::{self, iterator_new, map};
 use crate::iterators::lazyclone::LazyIterClone;
 use crate::rtor::{
   trivial_inputs_giver, trivial_inputs_iface_giver, InputsGiver, InputsIface, LevelIterator, Rtor,
-  RtorIface, SetPort, ShareLevelLowerBound,
+  RtorComptime, RtorIface, SetPort,
 };
 use irlf_db::ir::{Inst, LibCtor};
-use lf_types::{Net, Side};
+use lf_types::{Level, Net, Side};
+use std::cell::Cell;
 use std::{any::Any, cell::RefCell, marker::PhantomData, rc::Rc};
 
-// impl<'a> CloneIterator<ShareLevelLowerBound<'a>>
-//   for LazyIterClone<'a, ShareLevelLowerBound<'a>, dyn CloneIterator<ShareLevelLowerBound<'a>>>
-// {
-// }
-
-// macro_rules! fun1rtor {
-//   ($CtorName: ident, $CtorIfaceName: ident, $input_type: ident, $map: expr) => {
 struct FunRtorIface {
-  downstream: Rc<RefCell<Option<InputsIface>>>,
   f: Rc<dyn Fn(u64) -> u64>,
+}
+
+struct FunRtorComptime {
+  downstream: Rc<RefCell<Option<InputsIface>>>,
+  level: Rc<Cell<Level>>,
 }
 struct FunRtor<'db> {
   downstream: Option<InputsGiver<'db>>,
@@ -25,11 +23,17 @@ struct FunRtor<'db> {
   phantom: PhantomData<&'db u64>,
 }
 
-impl<'a> FunRtorIface {
+impl FunRtorIface {
   fn new(f: Rc<dyn Fn(u64) -> u64>) -> Self {
-    FunRtorIface {
+    FunRtorIface { f }
+  }
+}
+
+impl FunRtorComptime {
+  fn new() -> Self {
+    FunRtorComptime {
       downstream: Rc::new(RefCell::new(None)),
-      f,
+      level: Rc::new(Cell::new(Level(0))), // TODO: check?
     }
   }
 }
@@ -74,9 +78,16 @@ impl<'db> Rtor<'db> for FunRtor<'db> {
     None
   }
 }
-impl<'a> RtorIface<'a> for FunRtorIface {
+
+impl RtorComptime for FunRtorComptime {
+  fn iterate_levels(&mut self) -> bool {
+    false
+  }
+  fn levels(&self) -> Vec<Level> {
+    vec![] // never notify; fn-like rtors react immediately
+  }
   fn accept(&mut self, part: &[Inst], side: Side, inputs: &mut InputsIface) {
-    if part.len() > 0 {
+    if !part.is_empty() {
       panic!()
     }
     if let Side::Right = side {
@@ -85,30 +96,47 @@ impl<'a> RtorIface<'a> for FunRtorIface {
     }
   }
   fn provide(&self, part: &[Inst], side: Side) -> InputsIface {
-    if part.len() > 0 {
+    if !part.is_empty() {
       panic!()
     }
     // trivial_inputs_iface_giver()
     if let Side::Right = side {
       trivial_inputs_iface_giver()
     } else {
-      // Box::new(map(Box::new(LazyIterClone::new(&self.downstream)), |it| {
-      //   // self.level = it;
-      //   it
-      // }))
-      Box::new(LazyIterClone::new(Rc::clone(&self.downstream)))
+      let self_level = Rc::clone(&self.level);
+      map(
+        Box::new(LazyIterClone::new(Rc::clone(&self.downstream))),
+        Rc::new(move |it| {
+          let self_level = Rc::clone(&self_level);
+          Rc::new(move |x| {
+            self_level.replace(x);
+            it(x)
+          })
+        }),
+      )
     }
   }
-  fn iterate_levels(&mut self) -> bool {
-    false
-  }
-  fn levels(&self) -> Vec<u32> {
-    vec![] // never notify; fn-like rtors react immediately
-  }
-  fn in_levels(&self) -> Box<dyn LevelIterator> {
+}
+
+impl RtorIface for FunRtorIface {
+  fn immut_accept(
+    &self,
+    part: &[Inst],
+    side: Side,
+    provided_levels: &mut LevelIterator,
+    f: Rc<dyn Fn(Level, Level)>,
+  ) {
     todo!()
   }
-  fn out_levels(&self) -> Box<dyn LevelIterator> {
+  fn immut_provide(&self, part: &[Inst], side: Side, starting_level: Level) -> LevelIterator {
+    iterator_new(vec![starting_level])
+  }
+
+  fn n_levels(&self) -> u32 {
+    0 // no joining of distinct data flows
+  }
+
+  fn comptime_realize(&self) -> Box<dyn RtorComptime> {
     todo!()
   }
   // fn realize<'db>(&self, _inst_time_args: Vec<&'db dyn std::any::Any>) -> Box<dyn Rtor + 'db> {
@@ -120,12 +148,6 @@ impl<'a> RtorIface<'a> for FunRtorIface {
     })
   }
 }
-//   };
-// }
-
-// fun1rtor!(Add1, Add1Iface, u64, |sth| sth + 1);
-
-// fun1rtor!(Mul2, Mul2Iface, u64, |sth| sth * 2);
 
 pub fn lctor_of<'db>(db: &'db dyn irlf_db::Db, lctor: LibCtor) -> Box<dyn RtorIface + 'db> {
   match lctor.name(db).as_str() {

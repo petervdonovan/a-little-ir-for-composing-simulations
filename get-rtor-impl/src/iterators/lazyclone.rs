@@ -7,7 +7,7 @@ where
   backing_iter: Rc<RefCell<Option<Box<CloneIterator>>>>,
   backing_iter_clone: Option<Box<CloneIterator>>,
 }
-impl<'a, Item, CloneIterator: Iterator<Item = Item> + ?Sized> LazyIterClone<Item, CloneIterator>
+impl<Item, CloneIterator: Iterator<Item = Item> + ?Sized> LazyIterClone<Item, CloneIterator>
 where
   Box<CloneIterator>: Clone,
 {
@@ -19,7 +19,7 @@ where
   }
 }
 
-impl<'a, Item, CloneIterator: Iterator<Item = Item> + ?Sized> Clone
+impl<Item, CloneIterator: Iterator<Item = Item> + ?Sized> Clone
   for LazyIterClone<Item, CloneIterator>
 where
   Box<CloneIterator>: Clone,

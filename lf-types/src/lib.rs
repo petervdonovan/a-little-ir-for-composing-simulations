@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use derive_more::{Add, AddAssign};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -12,6 +13,11 @@ pub enum Nesting {
   Up,
   Down,
 }
+#[derive(
+  Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord, Add, AddAssign,
+)]
+pub struct Level(pub u32);
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
 pub struct IfaceNode<IfaceElt: std::hash::Hash>(pub Side, pub IfaceElt);
 pub type Iface<IfaceElt> = Vec<IfaceNode<IfaceElt>>;
