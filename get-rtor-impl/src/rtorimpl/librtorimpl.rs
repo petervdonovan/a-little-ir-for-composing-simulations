@@ -7,6 +7,7 @@ use crate::rtor::{
 use irlf_db::ir::{Inst, LibCtor};
 use lf_types::{Level, Net, Side};
 use std::cell::Cell;
+use std::collections::HashSet;
 use std::{any::Any, cell::RefCell, marker::PhantomData, rc::Rc};
 
 struct FunRtorIface {
@@ -83,8 +84,8 @@ impl RtorComptime for FunRtorComptime {
   fn iterate_levels(&mut self) -> bool {
     false
   }
-  fn levels(&self) -> Vec<Level> {
-    vec![] // never notify; fn-like rtors react immediately
+  fn levels(&self) -> HashSet<Level> {
+    HashSet::new() // never notify; fn-like rtors react immediately
   }
   fn accept(&mut self, part: &[Inst], side: Side, inputs: &mut InputsIface) {
     if !part.is_empty() {
@@ -119,13 +120,7 @@ impl RtorComptime for FunRtorComptime {
 }
 
 impl RtorIface for FunRtorIface {
-  fn immut_accept(
-    &self,
-    part: &[Inst],
-    side: Side,
-    provided_levels: &mut LevelIterator,
-    f: Rc<dyn Fn(Level, Level)>,
-  ) {
+  fn immut_accept(&self, part: &[Inst], side: Side, inputs_iface: &mut InputsIface) {
     todo!()
   }
   fn immut_provide(&self, part: &[Inst], side: Side, starting_level: Level) -> LevelIterator {
@@ -146,6 +141,15 @@ impl RtorIface for FunRtorIface {
       phantom: PhantomData,
       f: Rc::clone(&self.f),
     })
+  }
+
+  fn immut_provide_unique(
+    &self,
+    part: &[Inst],
+    side: Side,
+    starting_level: Level,
+  ) -> HashSet<Level> {
+    todo!()
   }
 }
 

@@ -1,7 +1,7 @@
 use dyn_clone::DynClone;
 use irlf_db::ir::Inst;
 use lf_types::{Level, Net, Side};
-use std::{any::Any, marker::PhantomData, rc::Rc};
+use std::{any::Any, collections::HashSet, marker::PhantomData, rc::Rc};
 
 use crate::iterators::cloneiterator::CloneIterator;
 // pub trait InputsIfaceIterator<'a>:
@@ -78,7 +78,7 @@ pub trait RtorComptime {
   fn iterate_levels(&mut self) -> bool;
   /// Returns the levels of the ambient program at which this reactor's local level is to be
   /// incremented.
-  fn levels(&self) -> Vec<Level>;
+  fn levels(&self) -> HashSet<Level>;
   /// Accepts the input of a downstream rtor. This is used for communication between the rtoriface
   /// instances about what the levels of their corresponding reactors should be.
   fn accept(&mut self, part: &[Inst], side: Side, inputs: &mut InputsIface);
@@ -95,6 +95,22 @@ pub trait RtorIface {
   /// The number of distinct levels required to model an instance of this rtor as a black box. This
   /// should be finite and trivial to compute.
   fn n_levels(&self) -> u32;
+  /// States the levels at which an instance of self is to receive a TAGL.
+  ///
+  /// Similar to `immut_provide`, but finite and without repetition nor order nor a guarantee that
+  /// it is exactly the same set of levels (although the numbers will be mostly the same).
+  fn immut_provide_unique(
+    &self,
+    part: &[Inst],
+    side: Side,
+    starting_level: Level,
+  ) -> HashSet<Level>;
+  fn levels(&self) -> HashSet<Level> {
+    let mut ret = HashSet::new();
+    ret.extend(self.immut_provide_unique(&vec![], Side::Left, Level(0)));
+    ret.extend(self.immut_provide_unique(&vec![], Side::Left, Level(0)));
+    ret
+  }
   /// If a level $n$ of an input provider receives from an output of self of level $k$, where $k$ is
   /// given with respect to the ambient level assignment of the immediately containing rtor of self,
   /// then invoke the impure function `f` on $(n, k)$. `f` should be idempotent in the sense that
@@ -105,13 +121,7 @@ pub trait RtorIface {
   /// rather than realizing effects on `self`.
   ///
   /// This function can be called by accept, but it should not call accept.
-  fn immut_accept(
-    &self,
-    part: &[Inst],
-    side: Side,
-    provided_levels: &mut LevelIterator,
-    f: Rc<dyn Fn(Level, Level)>,
-  );
+  fn immut_accept(&self, part: &[Inst], side: Side, inputs_iface: &mut InputsIface);
   /// Returns the levels of the inputs of self.
   ///
   /// This function can be called by provide, but it should not call provide.

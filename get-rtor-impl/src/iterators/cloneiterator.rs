@@ -6,28 +6,28 @@ pub trait CloneIterator<Item>: Iterator<Item = Item> + DynClone {}
 
 impl<T, Item> CloneIterator<Item> for T where T: Iterator<Item = Item> + DynClone {}
 
-pub struct Map<T, Item>
+pub struct Map<T, ItemIn, ItemOut>
 where
-  T: Iterator<Item = Item> + DynClone,
+  T: Iterator<Item = ItemIn> + DynClone + ?Sized,
 {
   backing_iterator: Box<T>,
-  f: Rc<dyn Fn(Item) -> Item>,
+  f: Rc<dyn Fn(ItemIn) -> ItemOut>,
 }
 
-impl<T, Item> Iterator for Map<T, Item>
+impl<T, ItemIn, ItemOut> Iterator for Map<T, ItemIn, ItemOut>
 where
-  T: Iterator<Item = Item> + DynClone,
+  T: Iterator<Item = ItemIn> + DynClone + ?Sized,
 {
-  type Item = Item;
+  type Item = ItemOut;
 
   fn next(&mut self) -> Option<Self::Item> {
     Some((*self.f)(self.backing_iterator.next()?))
   }
 }
 
-impl<T, Item: 'static> Clone for Map<T, Item>
+impl<T, ItemIn: 'static, ItemOut: 'static> Clone for Map<T, ItemIn, ItemOut>
 where
-  T: Iterator<Item = Item> + DynClone,
+  T: Iterator<Item = ItemIn> + DynClone + ?Sized,
 {
   fn clone(&self) -> Self {
     Self {
@@ -37,12 +37,12 @@ where
   }
 }
 
-pub fn map<'a, T, Item: 'static>(
+pub fn map<'a, T, ItemIn: 'static, ItemOut: 'static>(
   it: Box<T>,
-  f: Rc<dyn Fn(Item) -> Item>,
-) -> Box<dyn CloneIterator<Item> + 'a>
+  f: Rc<dyn Fn(ItemIn) -> ItemOut>,
+) -> Box<dyn CloneIterator<ItemOut> + 'a>
 where
-  T: Iterator<Item = Item> + DynClone + 'a,
+  T: Iterator<Item = ItemIn> + DynClone + 'a + ?Sized,
   // Box<dyn Iterator<Item = Item>>: Clone,
 {
   Box::new(Map {

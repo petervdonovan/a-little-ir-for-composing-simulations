@@ -1,4 +1,9 @@
-use std::{collections::HashMap, hash::Hash, rc::Rc};
+use std::{
+  cell::RefCell,
+  collections::{BTreeMap, HashMap, HashSet},
+  hash::Hash,
+  rc::Rc,
+};
 
 use irlf_db::{
   ir::{Connection, Inst, StructlikeCtor},
@@ -7,7 +12,7 @@ use irlf_db::{
 use lf_types::{Level, Side};
 
 use crate::{
-  iterators::cloneiterator::CloneIterator,
+  iterators::cloneiterator::{map, CloneIterator},
   rtor::{
     InputsGiver, InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface, ShareLevelLowerBound,
   },
@@ -23,10 +28,11 @@ pub struct Srtor<'db> {
   downstream: Option<InputsGiver<'db>>,
 }
 
-pub struct SrtorComptime {
+pub struct SrtorComptime<'a> {
+  iface: SrtorIface<'a>,
   ldownstream: Option<InputsIface>,
   rdownstream: Option<InputsIface>,
-  levels_internal2external: HashMap<Level, Level>,
+  levels_internal2external: Rc<RefCell<BTreeMap<Level, Level>>>,
   sctor: StructlikeCtor,
 }
 
@@ -66,12 +72,13 @@ impl<'a> Iterator for SideIterator<'a> {
   }
 }
 
-impl SrtorComptime {
-  fn new(sctor: StructlikeCtor) -> Self {
+impl<'a> SrtorComptime<'a> {
+  fn new(sctor: StructlikeCtor, iface: SrtorIface<'a>) -> Self {
     SrtorComptime {
+      iface,
       ldownstream: None,
       rdownstream: None,
-      levels_internal2external: HashMap::new(),
+      levels_internal2external: Rc::new(RefCell::new(BTreeMap::new())),
       sctor,
     }
   }
@@ -151,40 +158,52 @@ impl<'a> SrtorIface<'a> {
   }
 }
 
-impl RtorComptime for SrtorComptime {
+fn adjust(map: &mut BTreeMap<Level, Level>, mut lower_bound: Level, intrinsic_level: Level) {
+  for (_, l) in map.range_mut(intrinsic_level..) {
+    if *l < lower_bound {
+      lower_bound = *l + Level(1);
+      *l = lower_bound;
+    } else {
+      return;
+    }
+  }
+}
+
+impl<'a> RtorComptime for SrtorComptime<'a> {
   fn iterate_levels(&mut self) -> bool {
+    // Redo the accept. If fixpointing is just the same as redoing the accept, then maybe we should
+    // not bother with this function and instead just do the connection many times.
     todo!()
   }
 
-  fn levels(&self) -> Vec<Level> {
-    todo!()
+  fn levels(&self) -> HashSet<Level> {
+    self
+      .iface
+      .levels()
+      .into_iter()
+      .map(|l| (*self.levels_internal2external.borrow())[&l])
+      .collect()
   }
+
   fn accept(&mut self, part: &[Inst], side: lf_types::Side, inputs: &mut crate::rtor::InputsIface) {
-    // FIXME: this is all wrong
-    // *self.downstream(side) = Some(inputs.clone());
-    // for child in iface(self.ctor, self.db, side) {
-    //   self
-    //     .children
-    //     .get_mut(&child)
-    //     .unwrap()
-    //     .accept(&part[1..], side, inputs);
-    // }
+    self.iface.immut_accept(part, side, inputs);
     todo!()
   }
 
   fn provide(&self, part: &[Inst], side: lf_types::Side) -> crate::rtor::InputsIface {
-    todo!()
+    let mymap = Rc::clone(&self.levels_internal2external);
+    let f = Rc::new(move |intrinsic_level: Level| {
+      let mymap = Rc::clone(&mymap);
+      let f =
+        move |lower_bound: Level| adjust(&mut mymap.borrow_mut(), lower_bound, intrinsic_level);
+      Rc::new(f) as Rc<dyn Fn(Level)>
+    });
+    map(self.iface.immut_provide(part, side, Level(0)), f)
   }
 }
 
 impl<'a> RtorIface for SrtorIface<'a> {
-  fn immut_accept(
-    &self,
-    part: &[Inst],
-    side: Side,
-    provided_levels: &mut LevelIterator,
-    f: Rc<dyn Fn(Level, Level)>,
-  ) {
+  fn immut_accept(&self, part: &[Inst], side: Side, inputs_iface: &mut InputsIface) {
     for iface in self.side(side) {
       match part {
         [hd, tail @ ..] => {
@@ -192,7 +211,7 @@ impl<'a> RtorIface for SrtorIface<'a> {
         }
         [] => {
           for iface in self.side(side) {
-            iface.immut_accept(part, side, provided_levels, Rc::clone(&f));
+            iface.immut_accept(part, side, inputs_iface);
           }
         }
       }
@@ -237,6 +256,15 @@ impl<'a> RtorIface for SrtorIface<'a> {
   }
 
   fn comptime_realize(&self) -> Box<dyn RtorComptime> {
+    todo!()
+  }
+
+  fn immut_provide_unique(
+    &self,
+    part: &[Inst],
+    side: Side,
+    starting_level: Level,
+  ) -> HashSet<Level> {
     todo!()
   }
 }
