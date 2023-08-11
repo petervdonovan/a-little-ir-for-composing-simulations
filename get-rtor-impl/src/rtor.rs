@@ -14,7 +14,7 @@ pub type SetPort<'db> = Box<dyn Fn(&dyn Any) + 'db>;
 pub type Inputs<'a> = Box<dyn Iterator<Item = SetPort<'a>> + 'a>;
 pub type InputsGiver<'a> = Box<dyn Fn() -> Inputs<'a> + 'a>;
 
-pub type ShareLevelLowerBound = Rc<dyn Fn(Level)>;
+pub type ShareLevelLowerBound = Rc<dyn Fn(Level) -> bool>;
 dyn_clone::clone_trait_object!(CloneIterator<ShareLevelLowerBound>);
 dyn_clone::clone_trait_object!(CloneIterator<Level>);
 pub type InputsIface = Box<dyn CloneIterator<ShareLevelLowerBound>>;
@@ -91,7 +91,7 @@ pub trait RtorComptime {
 ///
 /// Implementors **should not** be mutable, i.e., they should not have cells nor should they be
 /// designed for modification after initialization.
-pub trait RtorIface {
+pub trait RtorIface<'db> {
   /// The number of distinct levels required to model an instance of this rtor as a black box. This
   /// should be finite and trivial to compute.
   fn n_levels(&self) -> u32;
@@ -121,13 +121,13 @@ pub trait RtorIface {
   /// rather than realizing effects on `self`.
   ///
   /// This function can be called by accept, but it should not call accept.
-  fn immut_accept(&self, part: &[Inst], side: Side, inputs_iface: &mut InputsIface);
+  fn immut_accept(&self, part: &[Inst], side: Side, inputs_iface: &mut InputsIface) -> bool;
   /// Returns the levels of the inputs of self.
   ///
   /// This function can be called by provide, but it should not call provide.
   fn immut_provide(&self, part: &[Inst], side: Side, starting_level: Level) -> LevelIterator;
   /// Produces an instance of the RtorComptime associated with this.
-  fn comptime_realize(&self) -> Box<dyn RtorComptime>;
+  fn comptime_realize(&self) -> Box<dyn RtorComptime + 'db>;
   /// Constructs an implementation given compile time and instantiation time args.
-  fn realize<'db>(&self, _inst_time_args: Vec<&'db dyn std::any::Any>) -> Box<dyn Rtor<'db> + 'db>;
+  fn realize(&self, _inst_time_args: Vec<&'db dyn std::any::Any>) -> Box<dyn Rtor<'db> + 'db>;
 }

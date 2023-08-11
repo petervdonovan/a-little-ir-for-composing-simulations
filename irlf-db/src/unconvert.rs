@@ -59,7 +59,7 @@ fn unconvert_ctor(
         iface: sctor
           .iface(db)
           .iter()
-          .map(|iface| IfaceNode(iface.0, iface.1.id(db)))
+          .map(|iface| IfaceNode(iface.0, unconvert_instref(db, &iface.1)))
           .collect(),
         connections: sctor
           .connections(db)

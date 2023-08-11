@@ -59,7 +59,7 @@ impl<'a> Unpretty<'a> for Side {
 
 impl<'a> Unpretty<'a> for IfaceNode<IfaceElt> {
   fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)> {
-    Ok(IfaceNode(Side::unpretty(toks)?, InstId::unpretty(toks)?))
+    Ok(IfaceNode(Side::unpretty(toks)?, InstRef::unpretty(toks)?))
   }
 }
 

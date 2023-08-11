@@ -2,12 +2,12 @@ use std::{collections::HashMap, path::PathBuf};
 
 use lf_types::{CtorId, DebugOnlyId, Iface, InstId};
 use serde::{Deserialize, Serialize};
-pub type IfaceElt = InstId;
+pub type IfaceElt = InstRef;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct CtorCall {
   pub ctor: CtorId,
 }
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
 pub struct InstRef(pub Vec<InstId>);
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct Connection {

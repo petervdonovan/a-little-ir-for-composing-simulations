@@ -135,7 +135,7 @@ fn convert_iface(
     .map(|node| {
       IfaceNode(
         node.0,
-        convert_ctorcall(db, ctorid2ctor, node.1, &instid2inst[&node.1]),
+        convert_instref(db, ctorid2ctor, instid2inst, &node.1),
       )
     })
     .collect()

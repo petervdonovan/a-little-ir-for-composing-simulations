@@ -119,8 +119,8 @@ impl RtorComptime for FunRtorComptime {
   }
 }
 
-impl RtorIface for FunRtorIface {
-  fn immut_accept(&self, part: &[Inst], side: Side, inputs_iface: &mut InputsIface) {
+impl<'db> RtorIface<'db> for FunRtorIface {
+  fn immut_accept(&self, part: &[Inst], side: Side, inputs_iface: &mut InputsIface) -> bool {
     todo!()
   }
   fn immut_provide(&self, part: &[Inst], side: Side, starting_level: Level) -> LevelIterator {
@@ -134,8 +134,7 @@ impl RtorIface for FunRtorIface {
   fn comptime_realize(&self) -> Box<dyn RtorComptime> {
     todo!()
   }
-  // fn realize<'db>(&self, _inst_time_args: Vec<&'db dyn std::any::Any>) -> Box<dyn Rtor + 'db> {
-  fn realize<'db>(&self, _inst_time_args: Vec<&'db dyn std::any::Any>) -> Box<dyn Rtor<'db> + 'db> {
+  fn realize(&self, _inst_time_args: Vec<&'db dyn std::any::Any>) -> Box<dyn Rtor<'db> + 'db> {
     Box::new(FunRtor {
       downstream: None,
       phantom: PhantomData,

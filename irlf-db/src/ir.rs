@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
-pub type IfaceElt = Inst;
+pub type IfaceElt = InstRef;
 
 use lf_types::{CtorId, DebugOnlyId, Iface, InstId};
 
