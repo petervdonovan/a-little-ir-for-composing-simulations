@@ -127,8 +127,8 @@ impl<'db> RtorIface<'db> for FunRtorIface {
     iterator_new(vec![starting_level])
   }
 
-  fn n_levels(&self) -> u32 {
-    0 // no joining of distinct data flows
+  fn n_levels(&self) -> Level {
+    Level(0) // no joining of distinct data flows
   }
 
   fn comptime_realize(&self) -> Box<dyn RtorComptime> {

@@ -94,7 +94,7 @@ pub trait RtorComptime {
 pub trait RtorIface<'db> {
   /// The number of distinct levels required to model an instance of this rtor as a black box. This
   /// should be finite and trivial to compute.
-  fn n_levels(&self) -> u32;
+  fn n_levels(&self) -> Level;
   /// States the levels at which an instance of self is to receive a TAGL.
   ///
   /// Similar to `immut_provide`, but finite and without repetition nor order nor a guarantee that
@@ -107,8 +107,8 @@ pub trait RtorIface<'db> {
   ) -> HashSet<Level>;
   fn levels(&self) -> HashSet<Level> {
     let mut ret = HashSet::new();
-    ret.extend(self.immut_provide_unique(&vec![], Side::Left, Level(0)));
-    ret.extend(self.immut_provide_unique(&vec![], Side::Left, Level(0)));
+    ret.extend(self.immut_provide_unique(&[], Side::Left, Level(0)));
+    ret.extend(self.immut_provide_unique(&[], Side::Left, Level(0)));
     ret
   }
   /// If a level $n$ of an input provider receives from an output of self of level $k$, where $k$ is

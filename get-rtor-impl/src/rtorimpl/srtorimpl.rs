@@ -1,21 +1,18 @@
 use std::{
   cell::RefCell,
   collections::{BTreeMap, HashMap, HashSet},
-  hash::Hash,
   rc::Rc,
 };
 
 use irlf_db::{
-  ir::{Connection, Inst, InstRef, StructlikeCtor},
+  ir::{Inst, InstRef, StructlikeCtor},
   Db,
 };
 use lf_types::{Level, Side};
 
 use crate::{
-  iterators::cloneiterator::{map, CloneIterator},
-  rtor::{
-    InputsGiver, InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface, ShareLevelLowerBound,
-  },
+  iterators::cloneiterator::map,
+  rtor::{InputsGiver, InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface},
 };
 
 use closure::closure;
@@ -32,10 +29,7 @@ pub struct Srtor<'db> {
 
 pub struct SrtorComptime<'a> {
   iface: SrtorIface<'a>,
-  ldownstream: Option<InputsIface>,
-  rdownstream: Option<InputsIface>,
   levels_internal2external: Rc<RefCell<BTreeMap<Level, Level>>>,
-  sctor: StructlikeCtor,
   external_connections: Vec<(Vec<Inst>, Side, InputsIface)>,
 }
 
@@ -77,20 +71,11 @@ impl<'a> Iterator for SideIterator<'a> {
 }
 
 impl<'a> SrtorComptime<'a> {
-  fn new(sctor: StructlikeCtor, iface: SrtorIface<'a>) -> Self {
+  fn new(iface: SrtorIface<'a>) -> Self {
     SrtorComptime {
       iface,
-      ldownstream: None,
-      rdownstream: None,
       levels_internal2external: Rc::new(RefCell::new(BTreeMap::new())),
-      sctor,
       external_connections: vec![],
-    }
-  }
-  fn downstream(&mut self, side: Side) -> &mut Option<InputsIface> {
-    match side {
-      Side::Left => &mut self.ldownstream,
-      Side::Right => &mut self.rdownstream,
     }
   }
 }
@@ -154,19 +139,46 @@ fn fixpoint<'db>(children: &mut HashMap<Inst, Box<dyn RtorComptime + 'db>>) {
   // TPO? You must add more constraints
 }
 
+/// An iterator over the ifaces of selected parts of a side.
+struct SubSideIfaceIterator<'a, I: Iterator<Item = Box<dyn RtorIface<'a> + 'a>>> {
+  it: I,
+  current_level: Level,
+}
+
+impl<'a, I: Iterator<Item = Box<dyn RtorIface<'a> + 'a>>> Iterator for SubSideIfaceIterator<'a, I> {
+  type Item = (Level, Box<dyn RtorIface<'a> + 'a>);
+
+  fn next(&mut self) -> Option<Self::Item> {
+    let ret = self.it.next()?;
+    let current_level = self.current_level;
+    self.current_level += ret.n_levels();
+    Some((current_level, ret))
+  }
+}
+
 impl<'a> SrtorIface<'a> {
   pub fn new(db: &'a dyn irlf_db::Db, sctor: StructlikeCtor) -> Self {
     SrtorIface { db, sctor }
   }
-  fn side(&'a self, side: Side) -> Box<dyn Iterator<Item = Box<dyn RtorIface + 'a>> + 'a> {
-    // Box::new(iface(self.sctor, self.db, side).map(|child| iface_of(self.db, child.ctor(self.db))))
-    Box::new(iface(self.sctor, self.db, side).flat_map(|child| {
+  fn side(
+    &'a self,
+    side: Side,
+    part: &[Inst],
+  ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface + 'a>)> + 'a> {
+    let part = part.to_vec();
+    let it = iface(self.sctor, self.db, side).flat_map(move |child| {
       child
         .iref(self.db)
         .iter()
+        .filter(|child| part.is_empty() || part[0] == **child)
         .map(|child| iface_of(self.db, child.ctor(self.db)))
         .collect::<Vec<_>>()
-    }))
+    });
+    let ssifi = SubSideIfaceIterator {
+      it,
+      current_level: Level(0),
+    };
+    Box::new(ssifi)
   }
 }
 
@@ -241,35 +253,32 @@ impl<'a> RtorComptime for SrtorComptime<'a> {
 impl<'a> RtorIface<'a> for SrtorIface<'a> {
   fn immut_accept(&self, part: &[Inst], side: Side, inputs_iface: &mut InputsIface) -> bool {
     let mut changed = false;
-    for iface in self.side(side) {
-      match part {
-        [hd, tail @ ..] => {
-          todo!()
-        }
-        [] => {
-          for iface in self.side(side) {
-            changed |= iface.immut_accept(part, side, inputs_iface);
-          }
-        }
-      }
+    for (starting_intrinsic_level, iface) in self.side(side, part) {
+      // TODO: map the inputs_iface and fold the conditional logic and the starting_intrinsic?_level into side
+      changed |= iface.immut_accept(
+        &part[1..],
+        side,
+        &mut map(
+          inputs_iface.clone(),
+          Rc::new(move |it| {
+            Rc::new(closure!(clone it, |level| it(level + starting_intrinsic_level)))
+          }),
+        ),
+      );
     }
     changed
   }
 
-  fn immut_provide(&self, part: &[Inst], side: Side, mut starting_level: Level) -> LevelIterator {
-    match part {
-      [hd, tail @ ..] => {
-        todo!()
-      }
-      [] => {
-        let mut sub_iterators = vec![];
-        for iface in self.side(side) {
-          sub_iterators.push(iface.immut_provide(&part[1..], side, starting_level));
-          starting_level += Level(iface.n_levels());
-        }
-        Box::new(ChainClone::new(sub_iterators))
-      }
+  fn immut_provide(&self, part: &[Inst], side: Side, starting_level: Level) -> LevelIterator {
+    let mut sub_iterators = vec![];
+    for (starting_intrinsic_level, iface) in self.side(side, part) {
+      sub_iterators.push(iface.immut_provide(
+        &part[1..],
+        side,
+        starting_level + starting_intrinsic_level,
+      ));
     }
+    Box::new(ChainClone::new(sub_iterators))
   }
 
   fn realize<'db>(&self, _inst_time_args: Vec<&'db dyn std::any::Any>) -> Box<dyn Rtor<'db> + 'db> {
@@ -289,34 +298,30 @@ impl<'a> RtorIface<'a> for SrtorIface<'a> {
     todo!("this can be implemented later after the level assignment algorithm passes unit tests")
   }
 
-  fn n_levels(&self) -> u32 {
+  fn n_levels(&self) -> Level {
     // iterate over the left side and ask how many left levels everything needs, and over the right
     // side to ask how many right levels everything needs.
     todo!()
   }
 
   fn comptime_realize(&self) -> Box<dyn RtorComptime + 'a> {
-    Box::new(SrtorComptime::new(self.sctor, self.clone()))
+    Box::new(SrtorComptime::new(self.clone()))
   }
 
   fn immut_provide_unique(
     &self,
     part: &[Inst],
     side: Side,
-    mut starting_level: Level,
+    starting_level: Level,
   ) -> HashSet<Level> {
-    match part {
-      [hd, tail @ ..] => {
-        todo!()
-      }
-      [] => {
-        let mut ret = HashSet::new();
-        for iface in self.side(side) {
-          ret.extend(iface.immut_provide_unique(&part[1..], side, starting_level));
-          starting_level += Level(iface.n_levels());
-        }
-        ret
-      }
+    let mut ret = HashSet::new();
+    for (starting_intrinsic_level, iface) in self.side(side, part) {
+      ret.extend(iface.immut_provide_unique(
+        &part[1..],
+        side,
+        starting_level + starting_intrinsic_level,
+      ));
     }
+    ret
   }
 }
