@@ -3,7 +3,7 @@ use irlf_db::ir::Inst;
 use lf_types::{Level, Net, Side};
 use std::{any::Any, collections::HashSet, marker::PhantomData, rc::Rc};
 
-use crate::iterators::cloneiterator::CloneIterator;
+use crate::{iterators::cloneiterator::CloneIterator, Db};
 // pub trait InputsIfaceIterator<'a>:
 //   Iterator<Item = ShareLevelLowerBound<'a>> + 'a + DynClone
 // {
@@ -91,24 +91,25 @@ pub trait RtorComptime {
 ///
 /// Implementors **should not** be mutable, i.e., they should not have cells nor should they be
 /// designed for modification after initialization.
-pub trait RtorIface<'db> {
+pub trait RtorIface {
   /// The number of distinct levels required to model an instance of this rtor as a black box. This
   /// should be finite and trivial to compute.
-  fn n_levels(&self) -> Level;
+  fn n_levels<'db>(&self, db: &'db dyn Db) -> Level;
   /// States the levels at which an instance of self is to receive a TAGL.
   ///
   /// Similar to `immut_provide`, but finite and without repetition nor order nor a guarantee that
   /// it is exactly the same set of levels (although the numbers will be mostly the same).
-  fn immut_provide_unique(
+  fn immut_provide_unique<'db>(
     &self,
+    db: &'db dyn Db,
     part: &[Inst],
     side: Side,
     starting_level: Level,
   ) -> HashSet<Level>;
-  fn levels(&self) -> HashSet<Level> {
+  fn levels<'db>(&self, db: &'db dyn Db) -> HashSet<Level> {
     let mut ret = HashSet::new();
-    ret.extend(self.immut_provide_unique(&[], Side::Left, Level(0)));
-    ret.extend(self.immut_provide_unique(&[], Side::Left, Level(0)));
+    ret.extend(self.immut_provide_unique(db, &[], Side::Left, Level(0)));
+    ret.extend(self.immut_provide_unique(db, &[], Side::Left, Level(0)));
     ret
   }
   /// If a level $n$ of an input provider receives from an output of self of level $k$, where $k$ is
@@ -121,19 +122,36 @@ pub trait RtorIface<'db> {
   /// rather than realizing effects on `self`.
   ///
   /// This function can be called by accept, but it should not call accept.
-  fn immut_accept(&self, part: &[Inst], side: Side, inputs_iface: &mut InputsIface) -> bool;
+  fn immut_accept<'db>(
+    &self,
+    db: &'db dyn Db,
+    part: &[Inst],
+    side: Side,
+    inputs_iface: &mut InputsIface,
+  ) -> bool;
   /// Returns the levels of the inputs of self.
   ///
   /// This function can be called by provide, but it should not call provide.
-  fn immut_provide(&self, part: &[Inst], side: Side, starting_level: Level) -> LevelIterator;
+  fn immut_provide<'db>(
+    &self,
+    db: &'db dyn Db,
+    part: &[Inst],
+    side: Side,
+    starting_level: Level,
+  ) -> LevelIterator;
   /// Produces an instance of the RtorComptime associated with this.
-  fn comptime_realize(&self) -> Box<dyn RtorComptime + 'db>;
+  fn comptime_realize<'db>(&self, db: &'db dyn Db) -> Box<dyn RtorComptime + 'db>;
   /// Constructs an implementation given compile time and instantiation time args.
-  fn realize(&self, _inst_time_args: Vec<&'db dyn std::any::Any>) -> Box<dyn Rtor<'db> + 'db>;
+  fn realize<'db>(
+    &self,
+    db: &'db dyn Db,
+    _inst_time_args: Vec<&'db dyn std::any::Any>,
+  ) -> Box<dyn Rtor<'db> + 'db>;
   /// Returns the rtorifaces exposed on the given side by the given part of this.
-  fn side(
+  fn side<'db>(
     &'db self,
+    db: &'db dyn Db,
     side: Side,
     part: &[Inst],
-  ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface + 'db>)> + 'db>;
+  ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface>)>>;
 }

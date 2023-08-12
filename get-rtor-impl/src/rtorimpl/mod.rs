@@ -1,10 +1,10 @@
-mod librtorimpl;
-mod srtorimpl;
+pub mod librtorimpl;
+pub mod srtorimpl;
 
-use crate::rtor::RtorIface;
+use crate::{rtor::RtorIface, Db};
 use irlf_db::ir::Ctor;
 
-pub fn iface_of<'db>(db: &'db dyn irlf_db::Db, ctor: &Ctor) -> Box<dyn RtorIface<'db> + 'db> {
+pub fn iface_of<'db>(db: &'db dyn Db, ctor: &Ctor) -> Box<dyn RtorIface + 'db> {
   match ctor {
     Ctor::StructlikeCtor(sctor) => {
       Box::new(crate::rtorimpl::srtorimpl::SrtorIface::new(db, *sctor))

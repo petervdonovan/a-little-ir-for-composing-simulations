@@ -4,6 +4,7 @@ use crate::rtor::{
   trivial_inputs_giver, trivial_inputs_iface_giver, InputsGiver, InputsIface, LevelIterator, Rtor,
   RtorComptime, RtorIface, SetPort,
 };
+use crate::Db;
 use irlf_db::ir::{Inst, LibCtor};
 use lf_types::{Level, Net, Side};
 use std::cell::Cell;
@@ -11,7 +12,7 @@ use std::collections::HashSet;
 use std::{any::Any, cell::RefCell, marker::PhantomData, rc::Rc};
 
 #[derive(Clone)]
-struct FunRtorIface {
+pub struct FunRtorIface {
   f: Rc<dyn Fn(u64) -> u64>,
 }
 
@@ -120,22 +121,38 @@ impl RtorComptime for FunRtorComptime {
   }
 }
 
-impl<'db> RtorIface<'db> for FunRtorIface {
-  fn immut_accept(&self, part: &[Inst], side: Side, inputs_iface: &mut InputsIface) -> bool {
+impl RtorIface for FunRtorIface {
+  fn immut_accept<'db>(
+    &self,
+    db: &'db dyn Db,
+    part: &[Inst],
+    side: Side,
+    inputs_iface: &mut InputsIface,
+  ) -> bool {
     todo!()
   }
-  fn immut_provide(&self, part: &[Inst], side: Side, starting_level: Level) -> LevelIterator {
+  fn immut_provide<'db>(
+    &self,
+    db: &'db dyn Db,
+    part: &[Inst],
+    side: Side,
+    starting_level: Level,
+  ) -> LevelIterator {
     iterator_new(vec![starting_level])
   }
 
-  fn n_levels(&self) -> Level {
+  fn n_levels<'db>(&self, db: &'db dyn Db) -> Level {
     Level(0) // no joining of distinct data flows
   }
 
-  fn comptime_realize(&self) -> Box<dyn RtorComptime> {
+  fn comptime_realize<'db>(&self, db: &'db dyn Db) -> Box<dyn RtorComptime> {
     todo!()
   }
-  fn realize(&self, _inst_time_args: Vec<&'db dyn std::any::Any>) -> Box<dyn Rtor<'db> + 'db> {
+  fn realize<'db>(
+    &self,
+    db: &'db dyn Db,
+    _inst_time_args: Vec<&'db dyn std::any::Any>,
+  ) -> Box<dyn Rtor<'db> + 'db> {
     Box::new(FunRtor {
       downstream: None,
       phantom: PhantomData,
@@ -143,8 +160,9 @@ impl<'db> RtorIface<'db> for FunRtorIface {
     })
   }
 
-  fn immut_provide_unique(
+  fn immut_provide_unique<'db>(
     &self,
+    db: &'db dyn Db,
     part: &[Inst],
     side: Side,
     starting_level: Level,
@@ -152,11 +170,12 @@ impl<'db> RtorIface<'db> for FunRtorIface {
     todo!()
   }
 
-  fn side(
+  fn side<'db>(
     &'db self,
+    db: &'db dyn Db,
     side: Side,
     part: &[Inst],
-  ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface + 'db>)> + 'db> {
+  ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface>)>> {
     let cself: Box<dyn RtorIface> = Box::new(self.clone());
     Box::new(vec![(Level(0), cself)].into_iter())
   }
