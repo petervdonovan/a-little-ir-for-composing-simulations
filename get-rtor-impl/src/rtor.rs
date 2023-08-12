@@ -130,4 +130,10 @@ pub trait RtorIface<'db> {
   fn comptime_realize(&self) -> Box<dyn RtorComptime + 'db>;
   /// Constructs an implementation given compile time and instantiation time args.
   fn realize(&self, _inst_time_args: Vec<&'db dyn std::any::Any>) -> Box<dyn Rtor<'db> + 'db>;
+  /// Returns the rtorifaces exposed on the given side by the given part of this.
+  fn side(
+    &'db self,
+    side: Side,
+    part: &[Inst],
+  ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface + 'db>)> + 'db>;
 }

@@ -160,25 +160,21 @@ impl<'a> SrtorIface<'a> {
   pub fn new(db: &'a dyn irlf_db::Db, sctor: StructlikeCtor) -> Self {
     SrtorIface { db, sctor }
   }
-  fn side(
-    &'a self,
-    side: Side,
-    part: &[Inst],
-  ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface + 'a>)> + 'a> {
-    let part = part.to_vec();
-    let it = iface(self.sctor, self.db, side).flat_map(move |child| {
-      child
-        .iref(self.db)
-        .iter()
-        .filter(|child| part.is_empty() || part[0] == **child)
-        .map(|child| iface_of(self.db, child.ctor(self.db)))
-        .collect::<Vec<_>>()
-    });
-    let ssifi = SubSideIfaceIterator {
-      it,
-      current_level: Level(0),
-    };
-    Box::new(ssifi)
+}
+
+/// If `a` is a prefix of `b`, return the part of `b` not matched by `a`, and vice versa. This
+/// function is symmetric wrt transposition of `a` and `b`.
+fn prefix_match<'a>(a: &[Inst], b: &'a [Inst]) -> Option<&'a [Inst]> {
+  match (a, b) {
+    (_, []) => Some(&[]),
+    ([], rest) => Some(rest),
+    ([phd, ptl @ ..], [whd, wtl @ ..]) => {
+      if phd == whd {
+        prefix_match(ptl, wtl)
+      } else {
+        None
+      }
+    }
   }
 }
 
@@ -323,5 +319,32 @@ impl<'a> RtorIface<'a> for SrtorIface<'a> {
       ));
     }
     ret
+  }
+  fn side(
+    &'a self,
+    side: Side,
+    part: &[Inst],
+  ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface + 'a>)> + 'a> {
+    // let part = part.to_vec();
+    // let it = iface(self.sctor, self.db, side)
+    //   .map(move |child| child.iref(self.db))
+    //   // child is nonempty because instrefs must be nonempty
+    //   .filter(move |child| part.is_empty() || part[0] == child[0])
+    //   .map(|child| iface_of(self.db, child[0].ctor(self.db)))
+    //   // .collect::<Vec<_>>()
+    //   ;
+    // let ssifi = SubSideIfaceIterator {
+    //   it,
+    //   current_level: Level(0),
+    // };
+    // Box::new(ssifi)
+    iface(self.sctor, self.db, side)
+      .map(|child| child.iref(self.db))
+      .filter_map(|child| {
+        let tail = prefix_match(&child, part)?;
+        let ret = iface_of(self.db, child[0].ctor(self.db)).side(side, tail);
+        Some(ret)
+      });
+    todo!()
   }
 }

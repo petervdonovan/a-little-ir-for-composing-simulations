@@ -10,6 +10,7 @@ use std::cell::Cell;
 use std::collections::HashSet;
 use std::{any::Any, cell::RefCell, marker::PhantomData, rc::Rc};
 
+#[derive(Clone)]
 struct FunRtorIface {
   f: Rc<dyn Fn(u64) -> u64>,
 }
@@ -149,6 +150,15 @@ impl<'db> RtorIface<'db> for FunRtorIface {
     starting_level: Level,
   ) -> HashSet<Level> {
     todo!()
+  }
+
+  fn side(
+    &'db self,
+    side: Side,
+    part: &[Inst],
+  ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface + 'db>)> + 'db> {
+    let cself: Box<dyn RtorIface> = Box::new(self.clone());
+    Box::new(vec![(Level(0), cself)].into_iter())
   }
 }
 
