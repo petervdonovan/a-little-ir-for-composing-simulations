@@ -1,9 +1,8 @@
-use dyn_clone::DynClone;
 use irlf_db::ir::Inst;
-use lf_types::{Level, Net, Side};
+use lf_types::{FlowDirection, Level, Net, Side};
 use std::{any::Any, collections::HashSet, marker::PhantomData, rc::Rc};
 
-use crate::{iterators::cloneiterator::CloneIterator, Db};
+use crate::{iterators::cloneiterator::CloneIterator, rtorimpl::FixpointingStatus, Db};
 // pub trait InputsIfaceIterator<'a>:
 //   Iterator<Item = ShareLevelLowerBound<'a>> + 'a + DynClone
 // {
@@ -75,7 +74,7 @@ pub trait RtorComptime {
   /// Progresses the level of this and returns true if the value that would be produced by
   /// `self.levels` has changed. The correctness of this fixpointing feature is necessary for global
   /// correctness.
-  fn iterate_levels(&mut self) -> bool;
+  fn iterate_levels(&mut self) -> FixpointingStatus;
   /// Returns the levels of the ambient program at which this reactor's local level is to be
   /// incremented.
   fn levels(&self) -> HashSet<Level>;
@@ -92,49 +91,56 @@ pub trait RtorComptime {
 /// Implementors **should not** be mutable, i.e., they should not have cells nor should they be
 /// designed for modification after initialization.
 pub trait RtorIface {
-  /// The number of distinct levels required to model an instance of this rtor as a black box. This
-  /// should be finite and trivial to compute.
-  fn n_levels<'db>(&self, db: &'db dyn Db) -> Level;
+  /// The number of distinct levels required to model the given side of any instance of this rtor as
+  /// a black box. This should be finite and trivial to compute.
+  ///
+  /// This will typically equal the initial flow direction, the number of internal flow direction
+  /// changes, and the final flow direction, all on the given side only.
+  fn n_levels(&self, db: &dyn Db, side: Side) -> (Level, Option<(FlowDirection, FlowDirection)>);
   /// States the levels at which an instance of self is to receive a TAGL.
   ///
   /// Similar to `immut_provide`, but finite and without repetition nor order nor a guarantee that
   /// it is exactly the same set of levels (although the numbers will be mostly the same).
-  fn immut_provide_unique<'db>(
+  fn immut_provide_unique(
     &self,
-    db: &'db dyn Db,
+    db: &dyn Db,
     part: &[Inst],
     side: Side,
     starting_level: Level,
   ) -> HashSet<Level>;
-  fn levels<'db>(&self, db: &'db dyn Db) -> HashSet<Level> {
+  fn levels(&self, db: &dyn Db) -> HashSet<Level> {
     let mut ret = HashSet::new();
     ret.extend(self.immut_provide_unique(db, &[], Side::Left, Level(0)));
-    ret.extend(self.immut_provide_unique(db, &[], Side::Left, Level(0)));
+    ret.extend(self.immut_provide_unique(db, &[], Side::Right, Level(0)));
     ret
   }
-  /// If a level $n$ of an input provider receives from an output of self of level $k$, where $k$ is
-  /// given with respect to the ambient level assignment of the immediately containing rtor of self,
-  /// then invoke the impure function `f` on $(n, k)$. `f` should be idempotent in the sense that
-  /// invoking `f` multiple times on the same arguments should have the same effect as invoking `f`
-  /// once on those arguments.
+  /// If the intrinsic level $n$ of `self` sends to a given element $f$ of the provided
+  /// `inputs_iface`, invoke $f$ on $n$. It is the responsibility of the caller to adjust the
+  /// intrisic level $n$ according to any offsets as needed.
+  ///
+  /// `f` should be idempotent in the sense that invoking `f` multiple times on the same arguments
+  /// should have the same effect as invoking `f` once on those arguments.
   ///
   /// Unlike `accept`, this function realizes effects on objects reachable from the closure of `f`
   /// rather than realizing effects on `self`.
   ///
   /// This function can be called by accept, but it should not call accept.
-  fn immut_accept<'db>(
+  ///
+  /// Returns whether any of the callees in the `inputs_iface` said that a change resulted from the
+  /// call.
+  fn immut_accept(
     &self,
-    db: &'db dyn Db,
+    db: &dyn Db,
     part: &[Inst],
     side: Side,
     inputs_iface: &mut InputsIface,
-  ) -> bool;
+  ) -> FixpointingStatus;
   /// Returns the levels of the inputs of self.
   ///
   /// This function can be called by provide, but it should not call provide.
-  fn immut_provide<'db>(
+  fn immut_provide(
     &self,
-    db: &'db dyn Db,
+    db: &dyn Db,
     part: &[Inst],
     side: Side,
     starting_level: Level,
@@ -149,9 +155,9 @@ pub trait RtorIface {
   ) -> Box<dyn Rtor<'db> + 'db>;
   /// Returns the rtorifaces exposed on the given side by the given part of this.
   fn side<'db>(
-    &'db self,
+    &self,
     db: &'db dyn Db,
     side: Side,
     part: &[Inst],
-  ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface>)>>;
+  ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface + 'db>)> + 'db>;
 }

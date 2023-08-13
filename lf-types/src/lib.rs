@@ -18,6 +18,12 @@ pub enum Nesting {
 )]
 pub struct Level(pub u32);
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub enum FlowDirection {
+  In,
+  Out,
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
 pub struct IfaceNode<IfaceElt: std::hash::Hash>(pub Side, pub IfaceElt);
 pub type Iface<IfaceElt> = Vec<IfaceNode<IfaceElt>>;

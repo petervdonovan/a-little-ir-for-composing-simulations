@@ -1,4 +1,4 @@
-use crate::iterators::cloneiterator::{self, iterator_new, map};
+use crate::iterators::cloneiterator::{iterator_new, map};
 use crate::iterators::lazyclone::LazyIterClone;
 use crate::rtor::{
   trivial_inputs_giver, trivial_inputs_iface_giver, InputsGiver, InputsIface, LevelIterator, Rtor,
@@ -6,10 +6,12 @@ use crate::rtor::{
 };
 use crate::Db;
 use irlf_db::ir::{Inst, LibCtor};
-use lf_types::{Level, Net, Side};
+use lf_types::{FlowDirection, Level, Net, Side};
 use std::cell::Cell;
 use std::collections::HashSet;
 use std::{any::Any, cell::RefCell, marker::PhantomData, rc::Rc};
+
+use super::FixpointingStatus;
 
 #[derive(Clone)]
 pub struct FunRtorIface {
@@ -83,8 +85,8 @@ impl<'db> Rtor<'db> for FunRtor<'db> {
 }
 
 impl RtorComptime for FunRtorComptime {
-  fn iterate_levels(&mut self) -> bool {
-    false
+  fn iterate_levels(&mut self) -> FixpointingStatus {
+    FixpointingStatus::Unchanged
   }
   fn levels(&self) -> HashSet<Level> {
     HashSet::new() // never notify; fn-like rtors react immediately
@@ -122,18 +124,18 @@ impl RtorComptime for FunRtorComptime {
 }
 
 impl RtorIface for FunRtorIface {
-  fn immut_accept<'db>(
+  fn immut_accept(
     &self,
-    db: &'db dyn Db,
-    part: &[Inst],
-    side: Side,
-    inputs_iface: &mut InputsIface,
-  ) -> bool {
-    todo!()
+    _db: &dyn Db,
+    _part: &[Inst],
+    _side: Side,
+    _inputs_iface: &mut InputsIface,
+  ) -> FixpointingStatus {
+    FixpointingStatus::Unchanged // do nothing; self does not have any levels
   }
-  fn immut_provide<'db>(
+  fn immut_provide(
     &self,
-    db: &'db dyn Db,
+    db: &dyn Db,
     part: &[Inst],
     side: Side,
     starting_level: Level,
@@ -141,8 +143,11 @@ impl RtorIface for FunRtorIface {
     iterator_new(vec![starting_level])
   }
 
-  fn n_levels<'db>(&self, db: &'db dyn Db) -> Level {
-    Level(0) // no joining of distinct data flows
+  fn n_levels(&self, db: &dyn Db, side: Side) -> (Level, Option<(FlowDirection, FlowDirection)>) {
+    match side {
+      Side::Left => (Level(0), Some((FlowDirection::In, FlowDirection::In))),
+      Side::Right => (Level(0), Some((FlowDirection::Out, FlowDirection::Out))),
+    }
   }
 
   fn comptime_realize<'db>(&self, db: &'db dyn Db) -> Box<dyn RtorComptime> {
@@ -160,9 +165,9 @@ impl RtorIface for FunRtorIface {
     })
   }
 
-  fn immut_provide_unique<'db>(
+  fn immut_provide_unique(
     &self,
-    db: &'db dyn Db,
+    db: &dyn Db,
     part: &[Inst],
     side: Side,
     starting_level: Level,
@@ -171,11 +176,11 @@ impl RtorIface for FunRtorIface {
   }
 
   fn side<'db>(
-    &'db self,
+    &self,
     db: &'db dyn Db,
     side: Side,
     part: &[Inst],
-  ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface>)>> {
+  ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface + 'db>)> + 'db> {
     let cself: Box<dyn RtorIface> = Box::new(self.clone());
     Box::new(vec![(Level(0), cself)].into_iter())
   }
