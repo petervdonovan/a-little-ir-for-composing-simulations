@@ -73,7 +73,9 @@ impl<'a> SrtorComptime<'a> {
     SrtorComptime {
       iface,
       db,
-      levels_internal2external: Rc::new(RefCell::new(BTreeMap::new())),
+      // Conservatively start with a "ghost" entry at level zero because this instance _could_ have
+      // inputs right before it in an interface with the same level as its starting level.
+      levels_internal2external: Rc::new(RefCell::new(BTreeMap::from([(Level(0), Level(0))]))),
       external_connections: vec![],
     }
   }
@@ -190,11 +192,17 @@ impl<'a, T, I: Iterator<Item = (Box<dyn RtorIface + 'a>, T)>> Iterator
     let (delta, start_end) = ret.n_levels(self.db, self.side);
     self.current_level += delta;
     if let Some((start, _)) = start_end {
-      self.current_level += Level(if let Some((_, d)) = self.last_flow_directions && d == start {
-        0
-      } else {
-        1
-      });
+      self.current_level += Level(
+        if let Some((_, d)) = self.last_flow_directions && d != start {
+          // in order not to break abstraction we must conservatively assume that even when going
+          // from input to output the level must be incremented because the output might depend on
+          // multiple inputs from the last sequence of inputs. Of course, if the last sequence of
+          // inputs consisted of only one atomic input, then we could do better, but currently even
+          // that is abstracted.
+          1
+        } else {
+          0
+        });
       self.last_flow_directions = start_end;
     }
     Some((current_level, ret, propagate))
@@ -214,13 +222,13 @@ fn adjust(
   map: &mut BTreeMap<Level, Level>,
   mut lower_bound: Level,
   intrinsic_level: Level,
-) -> bool {
-  let mut changed = false;
+) -> FixpointingStatus {
+  let mut changed = FixpointingStatus::Unchanged;
   for (_, l) in map.range_mut(intrinsic_level..) {
     if *l < lower_bound {
       lower_bound = *l + Level(1);
       *l = lower_bound;
-      changed = true;
+      changed = FixpointingStatus::Changed;
     } else {
       break;
     }
@@ -241,11 +249,13 @@ impl<'a> RtorComptime for SrtorComptime<'a> {
         *side,
         &mut map(
           inputs.clone(),
-          Rc::new(closure!(clone levels_map, |f: Rc<dyn Fn(Level) -> bool>| {
-            Rc::new(closure!(clone levels_map, |intrinsic_lower_bound| {
-              (*f)((*levels_map.borrow())[&intrinsic_lower_bound])
-            }))
-          })),
+          Rc::new(
+            closure!(clone levels_map, |f: Rc<dyn Fn(Level) -> FixpointingStatus>| {
+              Rc::new(closure!(clone levels_map, |intrinsic_lower_bound| {
+                (*f)((*levels_map.borrow())[&intrinsic_lower_bound])
+              }))
+            }),
+          ),
         ),
       );
     }
@@ -273,9 +283,29 @@ impl<'a> RtorComptime for SrtorComptime<'a> {
       let mymap = Rc::clone(&mymap);
       let f =
         move |lower_bound: Level| adjust(&mut mymap.borrow_mut(), lower_bound, intrinsic_level);
-      Rc::new(f) as Rc<dyn Fn(Level) -> bool>
+      Rc::new(f) as Rc<dyn Fn(Level) -> FixpointingStatus>
     });
     map(self.iface.immut_provide(self.db, part, side, Level(0)), f)
+  }
+
+  fn lower_bound(
+    &mut self,
+    part: &[Inst],
+    side: Side,
+    lower_bound: Level,
+    last_direction: FlowDirection,
+  ) {
+    if let Some((level, _iface)) = self.iface.side(self.db, side, part).next() {
+      adjust(
+        &mut self.levels_internal2external.borrow_mut(),
+        if last_direction == FlowDirection::In {
+          lower_bound
+        } else {
+          lower_bound + Level(1)
+        },
+        level,
+      );
+    }
   }
 }
 

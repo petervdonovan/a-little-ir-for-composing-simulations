@@ -8,6 +8,7 @@ use crate::Db;
 use irlf_db::ir::{Inst, LibCtor};
 use lf_types::{FlowDirection, Level, Net, Side};
 use std::cell::Cell;
+use std::cmp;
 use std::collections::HashSet;
 use std::{any::Any, cell::RefCell, marker::PhantomData, rc::Rc};
 
@@ -31,15 +32,6 @@ struct FunRtor<'db> {
 impl FunRtorIface {
   fn new(f: Rc<dyn Fn(u64) -> u64>) -> Self {
     FunRtorIface { f }
-  }
-}
-
-impl FunRtorComptime {
-  fn new() -> Self {
-    FunRtorComptime {
-      downstream: Rc::new(RefCell::new(None)),
-      level: Rc::new(Cell::new(Level(0))), // TODO: check?
-    }
   }
 }
 
@@ -84,6 +76,12 @@ impl<'db> Rtor<'db> for FunRtor<'db> {
   }
 }
 
+fn require_empty(part: &[Inst]) {
+  if !part.is_empty() {
+    panic!()
+  }
+}
+
 impl RtorComptime for FunRtorComptime {
   fn iterate_levels(&mut self) -> FixpointingStatus {
     FixpointingStatus::Unchanged
@@ -92,18 +90,14 @@ impl RtorComptime for FunRtorComptime {
     HashSet::new() // never notify; fn-like rtors react immediately
   }
   fn accept(&mut self, part: &[Inst], side: Side, inputs: &mut InputsIface) {
-    if !part.is_empty() {
-      panic!()
-    }
+    require_empty(part);
     if let Side::Right = side {
       RefCell::replace(self.downstream.as_ref(), Some(inputs.clone()));
       inputs.next(); // ! This assumes that the width of self is 1 !
     }
   }
   fn provide(&self, part: &[Inst], side: Side) -> InputsIface {
-    if !part.is_empty() {
-      panic!()
-    }
+    require_empty(part);
     // trivial_inputs_iface_giver()
     if let Side::Right = side {
       trivial_inputs_iface_giver()
@@ -119,6 +113,25 @@ impl RtorComptime for FunRtorComptime {
           })
         }),
       )
+    }
+  }
+
+  fn lower_bound(
+    &mut self,
+    part: &[Inst],
+    side: Side,
+    lower_bound: Level,
+    last_direction: FlowDirection,
+  ) {
+    require_empty(part);
+    if side == Side::Left {
+      let nonstrict = cmp::max(lower_bound, self.level.get());
+      let strict = nonstrict + Level(1);
+      self.level.replace(if last_direction == FlowDirection::Out {
+        nonstrict
+      } else {
+        strict
+      });
     }
   }
 }

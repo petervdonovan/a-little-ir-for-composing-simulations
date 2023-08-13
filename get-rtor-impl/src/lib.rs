@@ -1,5 +1,6 @@
 #![feature(trait_upcasting)]
 #![feature(let_chains)]
+#![feature(fn_traits)]
 mod iterators;
 pub mod rtor;
 mod rtorimpl;

@@ -13,7 +13,7 @@ pub type SetPort<'db> = Box<dyn Fn(&dyn Any) + 'db>;
 pub type Inputs<'a> = Box<dyn Iterator<Item = SetPort<'a>> + 'a>;
 pub type InputsGiver<'a> = Box<dyn Fn() -> Inputs<'a> + 'a>;
 
-pub type ShareLevelLowerBound = Rc<dyn Fn(Level) -> bool>;
+pub type ShareLevelLowerBound = Rc<dyn Fn(Level) -> FixpointingStatus>;
 dyn_clone::clone_trait_object!(CloneIterator<ShareLevelLowerBound>);
 dyn_clone::clone_trait_object!(CloneIterator<Level>);
 pub type InputsIface = Box<dyn CloneIterator<ShareLevelLowerBound>>;
@@ -75,6 +75,16 @@ pub trait RtorComptime {
   /// `self.levels` has changed. The correctness of this fixpointing feature is necessary for global
   /// correctness.
   fn iterate_levels(&mut self) -> FixpointingStatus;
+  /// Requires that the levels of the given part of `self` be lower-bounded by `lower_bound`.
+  /// Whether this bound is strict may depend on `last_direction`, the last flow direction on the
+  /// given side.
+  fn lower_bound(
+    &mut self,
+    part: &[Inst],
+    side: Side,
+    lower_bound: Level,
+    last_direction: FlowDirection,
+  );
   /// Returns the levels of the ambient program at which this reactor's local level is to be
   /// incremented.
   fn levels(&self) -> HashSet<Level>;
