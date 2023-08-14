@@ -11,9 +11,15 @@ pub fn convert(
   source: crate::ir::SourceProgram,
 ) -> (crate::ir::Program, crate::ir::Id2Sym) {
   let mut ctors = vec![];
+  let mut instid2inst = HashMap::new();
+  for (_, ctor) in source.source(db).ctors.iter() {
+    if let irlf_ser::ir::Ctor::StructlikeCtor(sctor) = ctor {
+      instid2inst.extend(sctor.insts.iter());
+    }
+  }
   let mut ctorid2ctor = HashMap::new();
   for (id, ctor) in source.source(db).ctors.iter() {
-    let ctor = convert_ctor(db, &source.source(db).ctors, *id, ctor);
+    let ctor = convert_ctor(db, &instid2inst, &source.source(db).ctors, *id, ctor);
     ctorid2ctor.insert(id, ctor);
     ctors.push(ctor);
   }
@@ -62,6 +68,7 @@ macro_rules! check_cache {
 
 fn convert_ctor(
   db: &dyn Db,
+  instid2inst: &HashMap<&InstId, &irlf_ser::ir::CtorCall>,
   ctorid2ctor: &HashMap<CtorId, irlf_ser::ir::Ctor>,
   id: CtorId,
   ctor: &irlf_ser::ir::Ctor,
@@ -69,9 +76,9 @@ fn convert_ctor(
   check_cache!(MEMO_CTORS, id);
   match ctor {
     irlf_ser::ir::Ctor::StructlikeCtor(sctor) => {
-      let insts = convert_insts(db, ctorid2ctor, sctor);
-      let iface = convert_iface(db, ctorid2ctor, &sctor.insts, &sctor.iface);
-      let connections = convert_connections(db, ctorid2ctor, &sctor.insts, &sctor.connections);
+      let insts = convert_insts(db, instid2inst, ctorid2ctor, sctor);
+      let iface = convert_iface(db, instid2inst, ctorid2ctor, &sctor.iface);
+      let connections = convert_connections(db, instid2inst, ctorid2ctor, &sctor.connections);
       crate::ir::Ctor::StructlikeCtor(crate::ir::StructlikeCtor::new(
         db,
         id,
@@ -91,8 +98,8 @@ fn convert_ctor(
 
 fn convert_connections(
   db: &dyn Db,
+  instid2inst: &HashMap<&InstId, &irlf_ser::ir::CtorCall>,
   ctorid2ctor: &HashMap<CtorId, irlf_ser::ir::Ctor>,
-  instid2inst: &HashMap<InstId, irlf_ser::ir::CtorCall>,
   connections: &[irlf_ser::ir::Connection],
 ) -> Vec<crate::ir::Connection> {
   connections
@@ -111,7 +118,7 @@ fn convert_connections(
 fn convert_instref(
   db: &dyn Db,
   ctorid2ctor: &HashMap<CtorId, irlf_ser::ir::Ctor>,
-  instid2inst: &HashMap<InstId, irlf_ser::ir::CtorCall>,
+  instid2inst: &HashMap<&InstId, &irlf_ser::ir::CtorCall>,
   iref: &irlf_ser::ir::InstRef,
 ) -> crate::ir::InstRef {
   crate::ir::InstRef::new(
@@ -119,15 +126,15 @@ fn convert_instref(
     iref
       .0
       .iter()
-      .map(|id| convert_ctorcall(db, ctorid2ctor, *id, &instid2inst[id]))
+      .map(|id| convert_ctorcall(db, instid2inst, ctorid2ctor, *id, &instid2inst[id]))
       .collect(),
   )
 }
 
 fn convert_iface(
   db: &dyn Db,
+  instid2inst: &HashMap<&InstId, &irlf_ser::ir::CtorCall>,
   ctorid2ctor: &HashMap<CtorId, irlf_ser::ir::Ctor>,
-  instid2inst: &HashMap<InstId, irlf_ser::ir::CtorCall>,
   iface: &Iface<irlf_ser::ir::IfaceElt>,
 ) -> Iface<crate::ir::IfaceElt> {
   iface
@@ -143,18 +150,20 @@ fn convert_iface(
 
 fn convert_insts(
   db: &dyn Db,
+  instid2inst: &HashMap<&InstId, &irlf_ser::ir::CtorCall>,
   ctorid2ctor: &HashMap<CtorId, irlf_ser::ir::Ctor>,
   sctor: &irlf_ser::ir::StructlikeCtor,
 ) -> Vec<crate::ir::Inst> {
   sctor
     .insts
     .iter()
-    .map(|(id, i)| convert_ctorcall(db, ctorid2ctor, *id, i))
+    .map(|(id, i)| convert_ctorcall(db, instid2inst, ctorid2ctor, *id, i))
     .collect()
 }
 
 fn convert_ctorcall(
   db: &dyn Db,
+  instid2inst: &HashMap<&InstId, &irlf_ser::ir::CtorCall>,
   ctorid2ctor: &HashMap<CtorId, irlf_ser::ir::Ctor>,
   id: InstId,
   call: &irlf_ser::ir::CtorCall,
@@ -163,6 +172,12 @@ fn convert_ctorcall(
   crate::ir::Inst::new(
     db,
     id,
-    convert_ctor(db, ctorid2ctor, call.ctor, &ctorid2ctor[&call.ctor]),
+    convert_ctor(
+      db,
+      instid2inst,
+      ctorid2ctor,
+      call.ctor,
+      &ctorid2ctor[&call.ctor],
+    ),
   )
 }
