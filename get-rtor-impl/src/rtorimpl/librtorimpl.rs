@@ -6,7 +6,7 @@ use crate::rtor::{
 };
 use crate::Db;
 use irlf_db::ir::{Inst, LibCtor};
-use lf_types::{FlowDirection, Level, Net, Side};
+use lf_types::{FlowDirection, Level, Net, Side, SideMatch};
 use std::any::TypeId;
 use std::cell::Cell;
 use std::cmp;
@@ -169,10 +169,15 @@ impl RtorIface for FunRtorIface {
     iterator_new(vec![starting_level])
   }
 
-  fn n_levels(&self, _db: &dyn Db, side: Side) -> (Level, Option<(FlowDirection, FlowDirection)>) {
+  fn n_levels(
+    &self,
+    _db: &dyn Db,
+    side: SideMatch,
+  ) -> (Level, Option<(FlowDirection, FlowDirection)>) {
     match side {
-      Side::Left => (Level(0), Some((FlowDirection::In, FlowDirection::In))),
-      Side::Right => (Level(0), Some((FlowDirection::Out, FlowDirection::Out))),
+      SideMatch::One(Side::Left) => (Level(0), Some((FlowDirection::In, FlowDirection::In))),
+      SideMatch::One(Side::Right) => (Level(0), Some((FlowDirection::Out, FlowDirection::Out))),
+      SideMatch::Both => (Level(1), Some((FlowDirection::In, FlowDirection::Out))),
     }
   }
 
@@ -207,11 +212,11 @@ impl RtorIface for FunRtorIface {
   fn side<'db>(
     &self,
     _db: &'db dyn Db,
-    _side: Side,
+    _side: SideMatch,
     _part: &[Inst],
-  ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface + 'db>)> + 'db> {
+  ) -> Box<dyn Iterator<Item = (Level, SideMatch, Box<dyn RtorIface + 'db>)> + 'db> {
     let cself: Box<dyn RtorIface> = Box::new(self.clone());
-    Box::new(vec![(Level(0), cself)].into_iter()) // FIXME: This assumes that the input width is only 1?
+    Box::new(vec![(Level(0), SideMatch::Both, cself)].into_iter()) // FIXME: This assumes that the input width is only 1?
   }
 
   fn iface_id(&self) -> u128 {

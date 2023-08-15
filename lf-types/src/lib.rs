@@ -9,6 +9,27 @@ pub enum Side {
   Right,
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub enum SideMatch {
+  One(Side),
+  Both,
+}
+
+impl SideMatch {
+  pub fn includes(&self, side: Side) -> bool {
+    match self {
+      SideMatch::One(s) => *s == side,
+      SideMatch::Both => true,
+    }
+  }
+  pub fn overlaps(&self, other: Self) -> bool {
+    match self {
+      SideMatch::One(s) => other.includes(*s),
+      SideMatch::Both => true,
+    }
+  }
+}
+
 pub enum Nesting {
   Up,
   Down,
@@ -25,7 +46,7 @@ pub enum FlowDirection {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
-pub struct IfaceNode<IfaceElt: std::hash::Hash>(pub Side, pub IfaceElt);
+pub struct IfaceNode<IfaceElt: std::hash::Hash>(pub SideMatch, pub IfaceElt);
 pub type Iface<IfaceElt> = Vec<IfaceNode<IfaceElt>>;
 
 pub type DeltaT = Vec<u64>;
@@ -43,6 +64,15 @@ impl Display for Side {
     match self {
       Self::Left => write!(f, "L"),
       Self::Right => write!(f, "R"),
+    }
+  }
+}
+
+impl Display for SideMatch {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      SideMatch::One(s) => s.fmt(f),
+      SideMatch::Both => write!(f, "A"),
     }
   }
 }

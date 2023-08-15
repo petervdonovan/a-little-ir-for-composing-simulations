@@ -5,7 +5,7 @@ use crate::ir::{
   BinaryCtor, Connection, Ctor, CtorCall, IfaceElt, InstRef, LibCtor, Program, StructlikeCtor, Sym,
 };
 use crate::lex::{Range, Token, TokenStream};
-use lf_types::{CtorId, DebugOnlyId, IfaceNode, InstId, Side};
+use lf_types::{CtorId, DebugOnlyId, IfaceNode, InstId, Side, SideMatch};
 
 /// Extracts a program from its pretty-printed format.
 ///
@@ -63,7 +63,22 @@ impl<'a> Unpretty<'a> for Side {
 
 impl<'a> Unpretty<'a> for IfaceNode<IfaceElt> {
   fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)> {
-    Ok(IfaceNode(Side::unpretty(toks)?, InstRef::unpretty(toks)?))
+    Ok(IfaceNode(
+      SideMatch::unpretty(toks)?,
+      InstRef::unpretty(toks)?,
+    ))
+  }
+}
+
+impl<'a> Unpretty<'a> for SideMatch {
+  fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)> {
+    let tok = toks.token(Some("L or R or A"))?;
+    match tok.s {
+      "L" => Ok(SideMatch::One(Side::Left)),
+      "R" => Ok(SideMatch::One(Side::Right)),
+      "A" => Ok(SideMatch::Both),
+      _ => Err(("expected L or R".to_string(), tok.r)),
+    }
   }
 }
 

@@ -32,6 +32,7 @@ pub fn iface_of<'db>(db: &'db dyn Db, ctor: &Ctor) -> Box<dyn RtorIface + 'db> {
 mod tests {
   use expect_test::expect;
   use irlf_db::from_text;
+  use lf_types::{Level, Side};
 
   use crate::GriTestDatabase;
 
@@ -67,6 +68,19 @@ rtor1 0x3
     let (program, _inst2sym) = from_text(text, &db);
     let iface = iface_of(&db, program.main(&db));
     let levels = format!("{:?}", iface.levels(&db));
+    let expected = expect![["{}"]];
+    expected.assert_eq(&levels);
+    let levels = format!(
+      "left: {:?}\nright: {:?}\nunique_left: {:?}\nunique_right: {:?}",
+      iface
+        .immut_provide(&db, &[], Side::Left, Level(0))
+        .collect::<Vec<_>>(),
+      iface
+        .immut_provide(&db, &[], Side::Right, Level(0))
+        .collect::<Vec<_>>(),
+      iface.immut_provide_unique(&db, &[], Side::Left, Level(0)),
+      iface.immut_provide_unique(&db, &[], Side::Right, Level(0))
+    );
     let expected = expect![[]];
     expected.assert_eq(&levels);
   }

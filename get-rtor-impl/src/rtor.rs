@@ -1,6 +1,6 @@
 use dyn_clone::DynClone;
 use irlf_db::ir::Inst;
-use lf_types::{FlowDirection, Level, Net, Side};
+use lf_types::{FlowDirection, Level, Net, Side, SideMatch};
 use std::{any::Any, collections::HashSet, marker::PhantomData, rc::Rc};
 
 use crate::{iterators::cloneiterator::CloneIterator, rtorimpl::FixpointingStatus, Db};
@@ -20,7 +20,6 @@ dyn_clone::clone_trait_object!(CloneIterator<Level>);
 pub type InputsIface = Box<dyn CloneIterator<ShareLevelLowerBound>>;
 
 pub type LevelIterator = Box<dyn CloneIterator<Level>>;
-// pub trait LevelIterator: Iterator<Item = Level> + DynClone {}
 
 pub struct EmptyIterator<'db, Item> {
   phantom: PhantomData<&'db Item>,
@@ -107,7 +106,11 @@ pub trait RtorIface: DynClone + std::fmt::Debug {
   ///
   /// This will typically equal the initial flow direction, the number of internal flow direction
   /// changes, and the final flow direction, all on the given side only.
-  fn n_levels(&self, db: &dyn Db, side: Side) -> (Level, Option<(FlowDirection, FlowDirection)>);
+  fn n_levels(
+    &self,
+    db: &dyn Db,
+    side: SideMatch,
+  ) -> (Level, Option<(FlowDirection, FlowDirection)>);
   /// States the levels at which an instance of self is to receive a TAGL.
   ///
   /// Similar to `immut_provide`, but finite and without repetition nor order nor a guarantee that
@@ -169,9 +172,22 @@ pub trait RtorIface: DynClone + std::fmt::Debug {
   fn side<'db>(
     &self,
     db: &'db dyn Db,
+    side: SideMatch,
+    part: &[Inst],
+  ) -> Box<dyn Iterator<Item = (Level, SideMatch, Box<dyn RtorIface + 'db>)> + 'db>;
+  /// Returns the rtorifaces exposed on the given side by the given part of this.
+  fn side_exact<'db>(
+    &self,
+    db: &'db dyn Db,
     side: Side,
     part: &[Inst],
-  ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface + 'db>)> + 'db>;
+  ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface + 'db>)> + 'db> {
+    Box::new(
+      self
+        .side(db, SideMatch::One(side), part)
+        .map(|(a, b, c)| (a, c)),
+    )
+  }
   fn iface_id(&self) -> u128;
 }
 
