@@ -5,7 +5,7 @@ use crate::rtor::{
   RtorComptime, RtorIface, SetPort,
 };
 use crate::Db;
-use irlf_db::ir::{Inst, LibCtor};
+use irlf_db::ir::Inst;
 use lf_types::{FlowDirection, Level, Net, Side, SideMatch};
 use std::any::TypeId;
 use std::cell::Cell;
@@ -15,6 +15,7 @@ use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::{any::Any, cell::RefCell, marker::PhantomData, rc::Rc};
 
+use super::util::require_empty;
 use super::FixpointingStatus;
 
 #[derive(Clone)]
@@ -40,7 +41,7 @@ struct FunRtor<'db> {
 }
 
 impl FunRtorIface {
-  fn new<T: Fn(u64) -> u64 + 'static>(f: T) -> Self {
+  pub fn new<T: Fn(u64) -> u64 + 'static>(f: T) -> Self {
     let mut hasher = DefaultHasher::new();
     TypeId::of::<T>().hash(&mut hasher);
     let id = (hasher.finish() as u128) ^ 0x60F0D1407CF238F917600842BACE12A3;
@@ -86,12 +87,6 @@ impl<'db> Rtor<'db> for FunRtor<'db> {
 
   fn step_up(&mut self) -> Option<Net> {
     None
-  }
-}
-
-fn require_empty(part: &[Inst]) {
-  if !part.is_empty() {
-    panic!()
   }
 }
 
@@ -153,11 +148,17 @@ impl RtorIface for FunRtorIface {
   fn immut_accept(
     &self,
     _db: &dyn Db,
-    _part: &[Inst],
-    _side: Side,
-    _inputs_iface: &mut InputsIface,
+    part: &[Inst],
+    side: Side,
+    inputs_iface: &mut InputsIface,
   ) -> FixpointingStatus {
-    FixpointingStatus::Unchanged // do nothing; self does not have any levels
+    require_empty(part);
+    if side == Side::Right {
+      let first = inputs_iface.next().unwrap();
+      first(Level(0))
+    } else {
+      FixpointingStatus::Unchanged
+    }
   }
   fn immut_provide(
     &self,
@@ -213,22 +214,14 @@ impl RtorIface for FunRtorIface {
     &self,
     _db: &'db dyn Db,
     _side: SideMatch,
-    _part: &[Inst],
+    part: &[Inst],
   ) -> Box<dyn Iterator<Item = (Level, SideMatch, Box<dyn RtorIface + 'db>)> + 'db> {
+    require_empty(part);
     let cself: Box<dyn RtorIface> = Box::new(self.clone());
     Box::new(vec![(Level(0), SideMatch::Both, cself)].into_iter()) // FIXME: This assumes that the input width is only 1?
   }
 
   fn iface_id(&self) -> u128 {
     self.id
-  }
-}
-
-#[salsa::tracked]
-pub fn lctor_of(db: &dyn crate::Db, lctor: LibCtor) -> Box<dyn RtorIface> {
-  match lctor.name(db).as_str() {
-    "add1" => Box::new(FunRtorIface::new(|x| x + 1)),
-    "mul2" => Box::new(FunRtorIface::new(|x| x * 2)),
-    s => panic!("\"{s}\" is not an lctor name"),
   }
 }

@@ -1,0 +1,121 @@
+use std::{
+  any::TypeId,
+  collections::{hash_map::DefaultHasher, HashSet},
+  fmt::Debug,
+  hash::{Hash, Hasher},
+  rc::Rc,
+};
+
+use irlf_db::ir::Inst;
+use lf_types::{FlowDirection, Level, Side, SideMatch};
+
+use crate::{
+  iterators::cloneiterator::iterator_new,
+  rtor::{InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface},
+};
+
+use super::{util::require_empty, FixpointingStatus};
+
+#[derive(Clone)]
+pub struct BiFunRtorIface {
+  f: Rc<dyn Fn(u64, u64) -> u64>,
+  id: u128,
+}
+impl BiFunRtorIface {
+  pub fn new<T: Fn(u64, u64) -> u64 + 'static>(f: T) -> Self {
+    let mut hasher = DefaultHasher::new();
+    TypeId::of::<T>().hash(&mut hasher);
+    let id = (hasher.finish() as u128) ^ 0xab28b6284f0552f30c158ea3265ea718;
+    BiFunRtorIface { f: Rc::new(f), id }
+  }
+}
+
+impl Debug for BiFunRtorIface {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("BiFunRtorIface")
+      .field("f", &"???")
+      .field("id", &self.id)
+      .finish()
+  }
+}
+
+impl RtorIface for BiFunRtorIface {
+  fn n_levels(
+    &self,
+    _db: &dyn crate::Db,
+    side: SideMatch,
+  ) -> (Level, Option<(FlowDirection, FlowDirection)>) {
+    match side {
+      SideMatch::One(Side::Left) => (Level(0), Some((FlowDirection::In, FlowDirection::In))),
+      SideMatch::One(Side::Right) => (Level(0), Some((FlowDirection::Out, FlowDirection::Out))),
+      SideMatch::Both => (Level(1), Some((FlowDirection::In, FlowDirection::Out))),
+    }
+  }
+
+  fn immut_provide_unique(
+    &self,
+    _db: &dyn crate::Db,
+    part: &[Inst],
+    side: Side,
+    starting_level: Level,
+  ) -> HashSet<Level> {
+    require_empty(part);
+    match side {
+      Side::Left => HashSet::from([starting_level]),
+      Side::Right => HashSet::from([]),
+    }
+  }
+
+  fn immut_accept(
+    &self,
+    _db: &dyn crate::Db,
+    part: &[Inst],
+    side: Side,
+    inputs_iface: &mut InputsIface,
+  ) -> FixpointingStatus {
+    require_empty(part);
+    if side == Side::Right {
+      let first = inputs_iface.next().unwrap();
+      first(Level(1))
+    } else {
+      FixpointingStatus::Unchanged
+    }
+  }
+
+  fn immut_provide(
+    &self,
+    _db: &dyn crate::Db,
+    _part: &[Inst],
+    _side: Side,
+    starting_level: Level,
+  ) -> LevelIterator {
+    iterator_new(vec![starting_level])
+  }
+
+  fn comptime_realize<'db>(&self, db: &'db dyn crate::Db) -> Box<dyn RtorComptime + 'db> {
+    todo!()
+  }
+
+  fn realize<'db>(
+    &self,
+    db: &'db dyn crate::Db,
+    _inst_time_args: Vec<&'db dyn std::any::Any>,
+  ) -> Box<dyn Rtor<'db> + 'db> {
+    todo!()
+  }
+
+  fn side<'db>(
+    &self,
+    _db: &'db dyn crate::Db,
+    _side: SideMatch,
+    part: &[Inst],
+  ) -> Box<dyn Iterator<Item = (Level, SideMatch, Box<dyn RtorIface + 'db>)> + 'db> {
+    require_empty(part);
+    let cself: Box<dyn RtorIface> = Box::new(self.clone());
+    Box::new(vec![(Level(0), SideMatch::Both, cself)].into_iter()) // FIXME: This assumes that the input width is only 1?
+  }
+
+  fn iface_id(&self) -> u128 {
+    self.id
+  }
+}

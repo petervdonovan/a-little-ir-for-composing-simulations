@@ -69,7 +69,7 @@ pub trait Rtor<'db> {
 
 /// A potentially mutable compile-time model of a runtime `Rtor`.
 ///
-/// `RtorComptime` instances **should not** instantiate `RtorComptime`s.
+/// `RtorComptime` instances **should not** directly nor transitively instantiate `RtorComptime`s.
 pub trait RtorComptime {
   /// Progresses the level of this and returns true if the value that would be produced by
   /// `self.levels` has changed. The correctness of this fixpointing feature is necessary for global

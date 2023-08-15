@@ -1,10 +1,16 @@
-pub mod librtorimpl;
+pub mod bifunrtorimpl;
+pub mod funrtorimpl;
 pub mod srtorimpl;
+mod util;
 
 use std::ops::BitOrAssign;
 
-use crate::{rtor::RtorIface, Db};
-use irlf_db::ir::Ctor;
+use crate::{
+  rtor::RtorIface,
+  rtorimpl::{bifunrtorimpl::BiFunRtorIface, funrtorimpl::FunRtorIface},
+  Db,
+};
+use irlf_db::ir::{Ctor, LibCtor};
 
 #[derive(PartialEq, Eq)]
 pub enum FixpointingStatus {
@@ -24,23 +30,53 @@ pub fn iface_of<'db>(db: &'db dyn Db, ctor: &Ctor) -> Box<dyn RtorIface + 'db> {
   match ctor {
     Ctor::StructlikeCtor(sctor) => crate::rtorimpl::srtorimpl::srtor_of(db, *sctor),
     Ctor::BinaryCtor(_) => todo!(),
-    Ctor::LibCtor(lctor) => crate::rtorimpl::librtorimpl::lctor_of(db, *lctor),
+    Ctor::LibCtor(lctor) => lctor_of(db, *lctor),
+  }
+}
+
+#[salsa::tracked]
+pub fn lctor_of(db: &dyn crate::Db, lctor: LibCtor) -> Box<dyn RtorIface> {
+  match lctor.name(db).as_str() {
+    "add1" => Box::new(FunRtorIface::new(|x| x + 1)),
+    "mul2" => Box::new(FunRtorIface::new(|x| x * 2)),
+    "sum" => Box::new(BiFunRtorIface::new(|x, y| x + y)),
+    "prod" => Box::new(BiFunRtorIface::new(|x, y| x * y)),
+    s => panic!("\"{s}\" is not an lctor name"),
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use expect_test::expect;
+  use expect_test::{expect, Expect};
   use irlf_db::from_text;
   use lf_types::{Level, Side};
 
   use crate::GriTestDatabase;
 
-  use super::{librtorimpl::lctor_of, *};
+  use super::*;
 
-  #[test]
-  fn test() {
-    let text = "mul2 0x0 mul2
+  fn shallow_expect(text: &str, expect: Expect) {
+    let db = GriTestDatabase::default();
+    let (program, _inst2sym) = from_text(text, &db);
+    let iface = iface_of(&db, program.main(&db));
+    let levels = format!("{:?}", iface.levels(&db));
+    let expected = expect![["{}"]];
+    expected.assert_eq(&levels);
+    let levels = format!(
+      "left: {:?}\nright: {:?}\nunique_left: {:?}\nunique_right: {:?}",
+      iface
+        .immut_provide(&db, &[], Side::Left, Level(0))
+        .collect::<Vec<_>>(),
+      iface
+        .immut_provide(&db, &[], Side::Right, Level(0))
+        .collect::<Vec<_>>(),
+      iface.immut_provide_unique(&db, &[], Side::Left, Level(0)),
+      iface.immut_provide_unique(&db, &[], Side::Right, Level(0))
+    );
+    expect.assert_eq(&levels);
+  }
+
+  const BASIC_NO_MERGING: &str = "mul2 0x0 mul2
 add1 0x1 add1
 ---
 ---
@@ -64,24 +100,43 @@ rtor1 0x3
 ---
 0x3
 ";
-    let db = GriTestDatabase::default();
-    let (program, _inst2sym) = from_text(text, &db);
-    let iface = iface_of(&db, program.main(&db));
-    let levels = format!("{:?}", iface.levels(&db));
-    let expected = expect![["{}"]];
-    expected.assert_eq(&levels);
-    let levels = format!(
-      "left: {:?}\nright: {:?}\nunique_left: {:?}\nunique_right: {:?}",
-      iface
-        .immut_provide(&db, &[], Side::Left, Level(0))
-        .collect::<Vec<_>>(),
-      iface
-        .immut_provide(&db, &[], Side::Right, Level(0))
-        .collect::<Vec<_>>(),
-      iface.immut_provide_unique(&db, &[], Side::Left, Level(0)),
-      iface.immut_provide_unique(&db, &[], Side::Right, Level(0))
-    );
-    let expected = expect![[]];
-    expected.assert_eq(&levels);
+  const MERGING: &str = "add1 0 add1
+sum 1 sum
+---
+---
+rtor0 2
+  madd1_0 100 = 0
+  madd1_2 101 = 0
+  ---
+  L 100 R 100
+  L 101 R 101
+  ---
+rtor1 3
+  sctor0 102 = 2
+  msum 103 = 1
+  ---
+  L 102
+  R 103
+  ---
+  200 102 103
+---
+3
+";
+
+  #[test]
+  fn test0() {
+    let text = BASIC_NO_MERGING;
+    let expect = expect![[r#"
+        left: [Level(0), Level(0)]
+        right: [Level(0), Level(0)]
+        unique_left: {}
+        unique_right: {}"#]];
+    shallow_expect(text, expect);
+  }
+  #[test]
+  fn test1() {
+    let text = MERGING;
+    let expect = expect![[r#""#]];
+    shallow_expect(text, expect);
   }
 }

@@ -9,7 +9,7 @@ mod rtorimpl;
 pub struct Jar(
   crate::rtorimpl::srtorimpl::SrtorIface,
   // crate::rtorimpl::librtorimpl::FunRtorIface,
-  rtorimpl::librtorimpl::lctor_of,
+  rtorimpl::lctor_of,
   rtorimpl::srtorimpl::srtor_of,
 );
 
