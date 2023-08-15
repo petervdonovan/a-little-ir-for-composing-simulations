@@ -126,7 +126,7 @@ fn convert_instref(
     iref
       .0
       .iter()
-      .map(|id| convert_ctorcall(db, instid2inst, ctorid2ctor, *id, &instid2inst[id]))
+      .map(|id| convert_ctorcall(db, instid2inst, ctorid2ctor, *id, instid2inst[id]))
       .collect(),
   )
 }

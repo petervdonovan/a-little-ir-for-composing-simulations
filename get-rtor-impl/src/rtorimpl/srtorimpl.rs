@@ -1,6 +1,7 @@
 use std::{
   cell::RefCell,
-  collections::{BTreeMap, HashMap, HashSet},
+  collections::{hash_map::DefaultHasher, BTreeMap, HashMap, HashSet},
+  hash::{Hash, Hasher},
   rc::Rc,
 };
 
@@ -60,7 +61,8 @@ impl<'a> Iterator for SideIterator<'a> {
 
   fn next(&mut self) -> Option<Self::Item> {
     loop {
-      let current = self.ctor.iface(self.db).get(self.pos)?;
+      let current = self.ctor.iface(self.db as &dyn irlf_db::Db).get(self.pos)?;
+      self.pos += 1;
       if self.side == current.0 {
         return Some(current.1);
       }
@@ -384,7 +386,7 @@ impl RtorIface for SrtorIface {
     for (starting_intrinsic_level, iface) in self.side(db, side, part) {
       ret.extend(iface.immut_provide_unique(
         db,
-        &part[1..],
+        if part.is_empty() { &[] } else { &part[1..] },
         side,
         starting_level + starting_intrinsic_level,
       ));
@@ -405,9 +407,12 @@ impl RtorIface for SrtorIface {
         (child, tail.to_vec())
       }), db, side)
       .filter_map(closure!(clone side, clone part, |(level, child, tail)| {
-        let longer = sequence_max(&tail, &part[1..])?;
+        let longer = match &part[..] {
+          [] => &tail,
+          [hd, part_tail @ ..] => sequence_max(&tail, &part_tail[1..])?
+        };
         // let iface = iface_of(db, longer[0].ctor(db));
-        let ret: Box<dyn Iterator<Item = (Level, Box<dyn RtorIface + 'db>)>> = child.side(db, side, &longer[1..]);
+        let ret: Box<dyn Iterator<Item = (Level, Box<dyn RtorIface + 'db>)>> = child.side(db, side, longer);
         Some(ret.map(move |(level_unadjusted, iface)| (level_unadjusted + level, iface)))
       }))
       .flatten();
@@ -423,4 +428,15 @@ impl RtorIface for SrtorIface {
     )
     .n_levels()
   }
+
+  fn iface_id(&self) -> u128 {
+    let mut hasher = DefaultHasher::new();
+    self.0.hash(&mut hasher);
+    (hasher.finish() as u128) ^ 0xD245FC1824A8F73E483FDC370C0F7BD6
+  }
+}
+
+#[salsa::tracked]
+pub fn srtor_of(db: &dyn crate::Db, sctor: StructlikeCtor) -> Box<dyn RtorIface> {
+  Box::new(SrtorIface::new(db, sctor))
 }

@@ -71,7 +71,7 @@ impl<'a> TokenStream<'a> {
     let mut og = *self;
     let mut backup = *self;
     while let Ok(mut block) = self.block() {
-      if let Ok(t) = block.token() {
+      if let Ok(t) = block.token(None) {
         if t.s == "---" {
           break;
         }
@@ -135,7 +135,7 @@ impl<'a> TokenStream<'a> {
     }
   }
   /// Consume a token and all whitespace before it, and produce the token.
-  pub fn token(&mut self) -> Result<Token<'a>, (String, Range)> {
+  pub fn token(&mut self, expected: Option<&str>) -> Result<Token<'a>, (String, Range)> {
     self.skip_whitespace();
     let length = if self.source.starts_with('.') {
       1
@@ -146,7 +146,10 @@ impl<'a> TokenStream<'a> {
         .get_or_insert(self.source.len())
     };
     if length == 0 {
-      return Err(("expected token, not nothing".to_string(), self.tail().1));
+      return Err((
+        format!("expected {} but got nothing", expected.unwrap_or("token")),
+        self.tail().1,
+      ));
     }
     let ret = Token {
       s: &self.source[..length],
@@ -218,7 +221,7 @@ mod tests {
   fn test_token() {
     let mut ts = TokenStream::new("this.is");
     assert_eq!(
-      ts.token(),
+      ts.token(None),
       Ok(Token {
         s: "this",
         r: Range {
@@ -230,7 +233,7 @@ mod tests {
       }),
     );
     assert_eq!(
-      ts.token(),
+      ts.token(None),
       Ok(Token {
         s: ".",
         r: Range {
@@ -242,7 +245,7 @@ mod tests {
       })
     );
     assert_eq!(
-      ts.token(),
+      ts.token(None),
       Ok(Token {
         s: "is",
         r: Range {
@@ -253,7 +256,7 @@ mod tests {
         }
       })
     );
-    assert!(ts.token().is_err());
+    assert!(ts.token(None).is_err());
   }
   #[test]
   fn test_offsides() {
@@ -267,7 +270,7 @@ mod tests {
     let mut block = ts.block().unwrap();
     let mut line = block.line().unwrap();
     assert_eq!(
-      line.token(),
+      line.token(None),
       Ok(Token {
         s: "the",
         r: Range {
@@ -278,11 +281,11 @@ mod tests {
         }
       })
     );
-    line.token().unwrap();
-    assert!(line.token().is_err());
+    line.token(None).unwrap();
+    assert!(line.token(None).is_err());
     line = block.line().unwrap();
     assert_eq!(
-      line.token(),
+      line.token(None),
       Ok(Token {
         s: "exciting",
         r: Range {
@@ -293,8 +296,8 @@ mod tests {
         }
       })
     );
-    line.token().unwrap();
-    assert!(line.token().is_err());
+    line.token(None).unwrap();
+    assert!(line.token(None).is_err());
     let next_line_in_block = block.line();
     assert!(
       next_line_in_block.is_err(),
@@ -303,7 +306,7 @@ mod tests {
     );
     line = ts.line().unwrap();
     assert_eq!(
-      line.token(),
+      line.token(None),
       Ok(Token {
         s: "imaginable",
         r: Range {
@@ -326,12 +329,12 @@ section2'
 ---",
     );
     let mut section0 = ts.section();
-    assert_eq!(section0.token().unwrap().s, "section0");
-    assert!(ts.section().token().is_err());
+    assert_eq!(section0.token(None).unwrap().s, "section0");
+    assert!(ts.section().token(None).is_err());
     let mut section2 = ts.section();
-    assert_eq!(section2.token().unwrap().s, "section2");
-    assert_eq!(section2.token().unwrap().s, "section2'");
-    assert!(section2.token().is_err());
-    assert!(ts.section().token().is_err());
+    assert_eq!(section2.token(None).unwrap().s, "section2");
+    assert_eq!(section2.token(None).unwrap().s, "section2'");
+    assert!(section2.token(None).is_err());
+    assert!(ts.section().token(None).is_err());
   }
 }

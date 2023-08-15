@@ -7,9 +7,12 @@ use crate::rtor::{
 use crate::Db;
 use irlf_db::ir::{Inst, LibCtor};
 use lf_types::{FlowDirection, Level, Net, Side};
+use std::any::TypeId;
 use std::cell::Cell;
 use std::cmp;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
+use std::hash::{Hash, Hasher};
 use std::{any::Any, cell::RefCell, marker::PhantomData, rc::Rc};
 
 use super::FixpointingStatus;
@@ -17,6 +20,13 @@ use super::FixpointingStatus;
 #[derive(Clone)]
 pub struct FunRtorIface {
   f: Rc<dyn Fn(u64) -> u64>,
+  id: u128,
+}
+
+impl std::fmt::Debug for FunRtorIface {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("FunRtorIface").field("f", &"??").finish()
+  }
 }
 
 struct FunRtorComptime {
@@ -30,8 +40,11 @@ struct FunRtor<'db> {
 }
 
 impl FunRtorIface {
-  fn new(f: Rc<dyn Fn(u64) -> u64>) -> Self {
-    FunRtorIface { f }
+  fn new<T: Fn(u64) -> u64 + 'static>(f: T) -> Self {
+    let mut hasher = DefaultHasher::new();
+    TypeId::of::<T>().hash(&mut hasher);
+    let id = (hasher.finish() as u128) ^ 0x60F0D1407CF238F917600842BACE12A3;
+    FunRtorIface { f: Rc::new(f), id }
   }
 }
 
@@ -148,27 +161,30 @@ impl RtorIface for FunRtorIface {
   }
   fn immut_provide(
     &self,
-    db: &dyn Db,
-    part: &[Inst],
-    side: Side,
+    _db: &dyn Db,
+    _part: &[Inst],
+    _side: Side,
     starting_level: Level,
   ) -> LevelIterator {
     iterator_new(vec![starting_level])
   }
 
-  fn n_levels(&self, db: &dyn Db, side: Side) -> (Level, Option<(FlowDirection, FlowDirection)>) {
+  fn n_levels(&self, _db: &dyn Db, side: Side) -> (Level, Option<(FlowDirection, FlowDirection)>) {
     match side {
       Side::Left => (Level(0), Some((FlowDirection::In, FlowDirection::In))),
       Side::Right => (Level(0), Some((FlowDirection::Out, FlowDirection::Out))),
     }
   }
 
-  fn comptime_realize<'db>(&self, db: &'db dyn Db) -> Box<dyn RtorComptime> {
-    todo!()
+  fn comptime_realize(&self, _db: &dyn Db) -> Box<dyn RtorComptime> {
+    Box::new(FunRtorComptime {
+      downstream: Rc::new(RefCell::new(None)),
+      level: Rc::new(Cell::new(Level(0))), // TODO: check?
+    })
   }
   fn realize<'db>(
     &self,
-    db: &'db dyn Db,
+    _db: &'db dyn Db,
     _inst_time_args: Vec<&'db dyn std::any::Any>,
   ) -> Box<dyn Rtor<'db> + 'db> {
     Box::new(FunRtor {
@@ -180,29 +196,34 @@ impl RtorIface for FunRtorIface {
 
   fn immut_provide_unique(
     &self,
-    db: &dyn Db,
-    part: &[Inst],
-    side: Side,
-    starting_level: Level,
+    _db: &dyn Db,
+    _part: &[Inst],
+    _side: Side,
+    _starting_level: Level,
   ) -> HashSet<Level> {
-    todo!()
+    HashSet::new() // never notify
   }
 
   fn side<'db>(
     &self,
-    db: &'db dyn Db,
-    side: Side,
-    part: &[Inst],
+    _db: &'db dyn Db,
+    _side: Side,
+    _part: &[Inst],
   ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface + 'db>)> + 'db> {
     let cself: Box<dyn RtorIface> = Box::new(self.clone());
-    Box::new(vec![(Level(0), cself)].into_iter())
+    Box::new(vec![(Level(0), cself)].into_iter()) // FIXME: This assumes that the input width is only 1?
+  }
+
+  fn iface_id(&self) -> u128 {
+    self.id
   }
 }
 
-pub fn lctor_of<'db>(db: &'db dyn irlf_db::Db, lctor: LibCtor) -> Box<dyn RtorIface + 'db> {
+#[salsa::tracked]
+pub fn lctor_of(db: &dyn crate::Db, lctor: LibCtor) -> Box<dyn RtorIface> {
   match lctor.name(db).as_str() {
-    "add1" => Box::new(FunRtorIface::new(Rc::new(|x| x + 1))),
-    "mul2" => Box::new(FunRtorIface::new(Rc::new(|x| x * 2))),
-    _ => panic!(),
+    "add1" => Box::new(FunRtorIface::new(|x| x + 1)),
+    "mul2" => Box::new(FunRtorIface::new(|x| x * 2)),
+    s => panic!("\"{s}\" is not an lctor name"),
   }
 }

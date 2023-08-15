@@ -1,3 +1,4 @@
+use dyn_clone::DynClone;
 use irlf_db::ir::Inst;
 use lf_types::{FlowDirection, Level, Net, Side};
 use std::{any::Any, collections::HashSet, marker::PhantomData, rc::Rc};
@@ -100,7 +101,7 @@ pub trait RtorComptime {
 ///
 /// Implementors **should not** be mutable, i.e., they should not have cells nor should they be
 /// designed for modification after initialization.
-pub trait RtorIface {
+pub trait RtorIface: DynClone + std::fmt::Debug {
   /// The number of distinct levels required to model the given side of any instance of this rtor as
   /// a black box. This should be finite and trivial to compute.
   ///
@@ -118,6 +119,7 @@ pub trait RtorIface {
     side: Side,
     starting_level: Level,
   ) -> HashSet<Level>;
+  /// Returns the levels at which an instance of `self` is to be notified of level advancement.
   fn levels(&self, db: &dyn Db) -> HashSet<Level> {
     let mut ret = HashSet::new();
     ret.extend(self.immut_provide_unique(db, &[], Side::Left, Level(0)));
@@ -170,4 +172,14 @@ pub trait RtorIface {
     side: Side,
     part: &[Inst],
   ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface + 'db>)> + 'db>;
+  fn iface_id(&self) -> u128;
 }
+
+dyn_clone::clone_trait_object!(RtorIface);
+
+impl PartialEq for Box<dyn RtorIface> {
+  fn eq(&self, other: &Self) -> bool {
+    self.iface_id() == other.iface_id()
+  }
+}
+impl Eq for Box<dyn RtorIface> {}

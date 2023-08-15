@@ -20,8 +20,12 @@ trait Unpretty<'a>: Sized {
   fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)>;
 }
 
-fn parse_id<Id, F: Fn(u64) -> Id>(toks: &mut TokenStream, ctor: F) -> Result<Id, (String, Range)> {
-  let tok = toks.token()?;
+fn parse_id<Id, F: Fn(u64) -> Id>(
+  toks: &mut TokenStream,
+  ctor: F,
+  description: &str,
+) -> Result<Id, (String, Range)> {
+  let tok = toks.token(Some(description))?;
   let parsed = if tok.s.starts_with("0x") {
     u64::from_str_radix(&tok.s[2..], 16)
   } else {
@@ -36,19 +40,19 @@ fn parse_id<Id, F: Fn(u64) -> Id>(toks: &mut TokenStream, ctor: F) -> Result<Id,
 
 impl<'a> Unpretty<'a> for CtorId {
   fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)> {
-    parse_id(toks, CtorId)
+    parse_id(toks, CtorId, "ctor id")
   }
 }
 
 impl<'a> Unpretty<'a> for InstId {
   fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)> {
-    parse_id(toks, InstId)
+    parse_id(toks, InstId, "inst id")
   }
 }
 
 impl<'a> Unpretty<'a> for Side {
   fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)> {
-    let tok = toks.token()?;
+    let tok = toks.token(Some("L or R"))?;
     match tok.s {
       "L" => Ok(Side::Left),
       "R" => Ok(Side::Right),
@@ -76,7 +80,7 @@ impl<'a> Unpretty<'a> for InstRef {
     let mut insts = Vec::new();
     insts.push(InstId::unpretty(toks)?);
     let mut backup = *toks;
-    while let Ok(Token { s: ".", .. }) = toks.token() {
+    while let Ok(Token { s: ".", .. }) = toks.token(None) {
       insts.push(InstId::unpretty(toks)?);
       backup = *toks;
     }
@@ -87,7 +91,7 @@ impl<'a> Unpretty<'a> for InstRef {
 
 impl<'a> Unpretty<'a> for Connection {
   fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)> {
-    let id = parse_id(toks, DebugOnlyId)?;
+    let id = parse_id(toks, DebugOnlyId, "connection id")?;
     let left = InstRef::unpretty(toks)?;
     let right = InstRef::unpretty(toks)?;
     Ok(Connection { id, left, right })
@@ -104,10 +108,10 @@ impl<'a> Unpretty<'a> for StructlikeCtor {
     let mut iface_section = toks.section();
     let mut connections_section = toks.section();
     for mut line in instantiations_section.lines() {
-      let sym = line.token()?.s.to_string();
+      let sym = line.token(Some("inst name"))?.s.to_string();
       let id = InstId::unpretty(&mut line)?;
       inst2sym.insert(id, sym);
-      let Token { r, s: equals } = &line.token()?;
+      let Token { r, s: equals } = &line.token(Some("equals sign"))?;
       match *equals {
         "=" => {
           insts.insert(id, CtorCall::unpretty(&mut line)?);
@@ -144,7 +148,7 @@ impl<'a> Unpretty<'a> for BinaryCtor {
 
 impl<'a> Unpretty<'a> for LibCtor {
   fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)> {
-    let name = toks.token()?;
+    let name = toks.token(Some("lctor name"))?;
     Ok(LibCtor {
       name: name.s.to_string(),
     })
@@ -163,7 +167,7 @@ where
 {
   for mut block in section.blocks() {
     let mut header = block.line()?;
-    let sym = header.token()?.s;
+    let sym = header.token(Some("ctor name"))?.s;
     let cid = CtorId::unpretty(&mut header)?;
     let ctor = CtorTyp::unpretty(if big { &mut block } else { &mut header })?;
     ctor2sym.insert(cid, sym.to_string());
@@ -213,7 +217,7 @@ mod tests {
     let mut toks = TokenStream::new(s);
     let tripped = T::unpretty(&mut toks).unwrap().to_string();
     pretty_assertions::assert_eq!(s, tripped);
-    assert!(toks.token().is_err());
+    assert!(toks.token(None).is_err());
   }
 
   #[test]

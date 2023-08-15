@@ -4,20 +4,23 @@ pub type IfaceElt = InstRef;
 
 use lf_types::{CtorId, DebugOnlyId, Iface, InstId};
 
-#[salsa::interned]
+#[salsa::tracked]
 pub struct Inst {
+  #[id]
   pub id: InstId,
   #[return_ref]
   pub ctor: Ctor,
 }
 
-#[salsa::interned]
+#[salsa::tracked]
 pub struct InstRef {
+  #[id]
   pub iref: Vec<Inst>,
 }
 
-#[salsa::interned]
+#[salsa::tracked]
 pub struct Connection {
+  #[id]
   pub id: DebugOnlyId,
   #[return_ref]
   pub left: InstRef,
@@ -25,8 +28,9 @@ pub struct Connection {
   pub right: InstRef,
 }
 
-#[salsa::interned]
+#[salsa::tracked]
 pub struct StructlikeCtor {
+  #[id]
   pub id: CtorId,
   #[return_ref]
   pub insts: Vec<Inst>,
