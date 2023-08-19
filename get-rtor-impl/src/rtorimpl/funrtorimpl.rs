@@ -1,12 +1,12 @@
 use crate::iterators::cloneiterator::{iterator_new, map};
 use crate::iterators::lazyclone::LazyIterClone;
 use crate::rtor::{
-  trivial_inputs_giver, trivial_inputs_iface_giver, InputsGiver, InputsIface, LevelIterator, Rtor,
-  RtorComptime, RtorIface, SetPort,
+  trivial_inputs_giver, trivial_inputs_iface_giver, IIEltE, InputsGiver, InputsIface,
+  LevelIterator, Rtor, RtorComptime, RtorIface, SetPort,
 };
 use crate::Db;
 use irlf_db::ir::Inst;
-use lf_types::{FlowDirection, Level, Net, Side, SideMatch};
+use lf_types::{Comm, FlowDirection, Level, Net, Side, SideMatch};
 use std::any::TypeId;
 use std::cell::Cell;
 use std::cmp;
@@ -110,17 +110,19 @@ impl RtorComptime for FunRtorComptime {
     if let Side::Right = side {
       trivial_inputs_iface_giver()
     } else {
-      let self_level = Rc::clone(&self.level);
-      map(
-        Box::new(LazyIterClone::new(Rc::clone(&self.downstream))),
-        Rc::new(move |it| {
-          let self_level = Rc::clone(&self_level);
-          Rc::new(move |x| {
-            self_level.replace(x);
-            it(x)
-          })
-        }),
-      )
+      // let self_level = Rc::clone(&self.level);
+      // map(
+      //   Box::new(LazyIterClone::new(Rc::clone(&self.downstream))),
+      //   Rc::new(move |it: lf_types::Comm<Rc<dyn Fn(lf_types::Comm<Level>) -> FixpointingStatus>>| {
+      //     let self_level = Rc::clone(&self_level);
+      //     let c: dyn Fn(Level) -> IIEltE = move |x| {
+      //       self_level.replace(x);
+      //       it(x)
+      //     };
+      //     Rc::new(c)
+      //   }),
+      // )
+      todo!()
     }
   }
 
@@ -155,7 +157,9 @@ impl RtorIface for FunRtorIface {
     require_empty(part);
     if side == Side::Right {
       let first = inputs_iface.next().unwrap();
-      first(Level(0))
+      // FIXME: The right thing to do here is probably to find the first element of the iface that
+      // is not a Notify
+      first.unwrap()(Comm::Data(Level(0)))
     } else {
       FixpointingStatus::Unchanged
     }
@@ -167,19 +171,11 @@ impl RtorIface for FunRtorIface {
     _side: Side,
     starting_level: Level,
   ) -> LevelIterator {
-    iterator_new(vec![starting_level])
+    iterator_new(vec![Comm::Data(starting_level)])
   }
 
-  fn n_levels(
-    &self,
-    _db: &dyn Db,
-    side: SideMatch,
-  ) -> (Level, Option<(FlowDirection, FlowDirection)>) {
-    match side {
-      SideMatch::One(Side::Left) => (Level(0), Some((FlowDirection::In, FlowDirection::In))),
-      SideMatch::One(Side::Right) => (Level(0), Some((FlowDirection::Out, FlowDirection::Out))),
-      SideMatch::Both => (Level(1), Some((FlowDirection::In, FlowDirection::Out))),
-    }
+  fn n_levels(&self, _db: &dyn Db, side: SideMatch) -> Level {
+    Level(0)
   }
 
   fn comptime_realize(&self, _db: &dyn Db) -> Box<dyn RtorComptime> {
@@ -205,9 +201,9 @@ impl RtorIface for FunRtorIface {
     _db: &dyn Db,
     _part: &[Inst],
     _side: Side,
-    _starting_level: Level,
+    starting_level: Level,
   ) -> HashSet<Level> {
-    HashSet::new() // never notify
+    HashSet::from([starting_level]) // never notify
   }
 
   fn side<'db>(
@@ -215,10 +211,11 @@ impl RtorIface for FunRtorIface {
     _db: &'db dyn Db,
     _side: SideMatch,
     part: &[Inst],
-  ) -> Box<dyn Iterator<Item = (Level, SideMatch, Box<dyn RtorIface + 'db>)> + 'db> {
+  ) -> Box<dyn Iterator<Item = (Level, SideMatch, Comm<Box<dyn RtorIface + 'db>>)> + 'db> {
     require_empty(part);
     let cself: Box<dyn RtorIface> = Box::new(self.clone());
-    Box::new(vec![(Level(0), SideMatch::Both, cself)].into_iter()) // FIXME: This assumes that the input width is only 1?
+    Box::new(vec![(Level(0), SideMatch::Both, Comm::Data(cself))].into_iter())
+    // FIXME: This assumes that the input width is only 1?
   }
 
   fn iface_id(&self) -> u128 {

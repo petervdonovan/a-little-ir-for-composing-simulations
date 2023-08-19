@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::hash::Hash;
 
 use derive_more::{Add, AddAssign};
 use serde::{Deserialize, Serialize};
@@ -44,9 +45,13 @@ pub enum FlowDirection {
   In,
   Out,
 }
-
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
+pub enum Comm<IfaceElt> {
+  Notify,
+  Data(IfaceElt),
+}
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
-pub struct IfaceNode<IfaceElt: std::hash::Hash>(pub SideMatch, pub IfaceElt);
+pub struct IfaceNode<IfaceElt>(pub SideMatch, pub Comm<IfaceElt>);
 pub type Iface<IfaceElt> = Vec<IfaceNode<IfaceElt>>;
 
 pub type DeltaT = Vec<u64>;
@@ -77,9 +82,33 @@ impl Display for SideMatch {
   }
 }
 
-impl<IfaceElt: Display + std::hash::Hash> Display for IfaceNode<IfaceElt> {
+impl<IfaceElt: Display> Display for IfaceNode<IfaceElt> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "{} {}", self.0, self.1)
+  }
+}
+
+impl<IfaceEltA> Comm<IfaceEltA> {
+  pub fn map<IfaceEltB>(&self, f: impl Fn(&IfaceEltA) -> IfaceEltB) -> Comm<IfaceEltB> {
+    match self {
+      Comm::Notify => Comm::Notify,
+      Comm::Data(x) => Comm::Data(f(x)),
+    }
+  }
+  pub fn unwrap(self) -> IfaceEltA {
+    match self {
+      Comm::Notify => panic!(),
+      Comm::Data(x) => x,
+    }
+  }
+}
+
+impl<IfaceElt: Display> Display for Comm<IfaceElt> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Comm::Notify => write!(f, "-"),
+      Comm::Data(k) => k.fmt(f),
+    }
   }
 }
 

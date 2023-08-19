@@ -5,9 +5,9 @@ use std::{
   rc::Rc,
 };
 
-use crate::Db;
+use crate::{rtor::IIEltE, Db};
 use irlf_db::ir::{Inst, InstRef, StructlikeCtor};
-use lf_types::{FlowDirection, Level, Side, SideMatch};
+use lf_types::{Comm, FlowDirection, Iface, Level, Side, SideMatch};
 
 use crate::{
   iterators::cloneiterator::map,
@@ -57,14 +57,14 @@ impl<'a> SideIterator<'a> {
 }
 
 impl<'a> Iterator for SideIterator<'a> {
-  type Item = InstRef;
+  type Item = Comm<InstRef>;
 
   fn next(&mut self) -> Option<Self::Item> {
     loop {
       let current = self.ctor.iface(self.db as &dyn irlf_db::Db).get(self.pos)?;
       self.pos += 1;
       if self.side.overlaps(current.0) {
-        return Some(current.1);
+        return Some(current.1.clone());
       }
     }
   }
@@ -143,15 +143,15 @@ fn fixpoint<'db>(children: &mut HashMap<Inst, Box<dyn RtorComptime + 'db>>) {
 }
 
 /// An iterator over the ifaces of selected parts of a side.
-struct StartingIntrinsicLevelProvider<'a, T, I: Iterator<Item = (Box<dyn RtorIface + 'a>, T)>> {
+struct StartingIntrinsicLevelProvider<'a, T, I: Iterator<Item = Comm<(Box<dyn RtorIface + 'a>, T)>>>
+{
   it: I,
   db: &'a dyn Db,
   side: SideMatch,
   current_level: Level,
-  last_flow_directions: Option<(FlowDirection, FlowDirection)>,
 }
 
-impl<'a, T, I: Iterator<Item = (Box<dyn RtorIface + 'a>, T)>>
+impl<'a, T, I: Iterator<Item = Comm<(Box<dyn RtorIface + 'a>, T)>>>
   StartingIntrinsicLevelProvider<'a, T, I>
 {
   fn new(it: I, db: &'a dyn Db, side: SideMatch) -> Self {
@@ -160,54 +160,30 @@ impl<'a, T, I: Iterator<Item = (Box<dyn RtorIface + 'a>, T)>>
       db,
       side,
       current_level: Level(0),
-      last_flow_directions: None,
     }
   }
-  fn n_levels(mut self) -> (Level, Option<(FlowDirection, FlowDirection)>) {
-    while self.last_flow_directions.is_none() {
-      self.next();
-    }
-    let start_flow_direction = if let Some((s, _)) = self.last_flow_directions {
-      Some(s)
-    } else {
-      None
-    };
+  fn n_levels(mut self) -> Level {
     for _ in self.by_ref() {}
-    let flow_directions = if let Some(start) = start_flow_direction {
-      // OK to unwrap here because if there is a start direction then there must be an end direction
-      Some((start, self.last_flow_directions.unwrap().1))
-    } else {
-      None
-    };
-    (self.current_level, flow_directions)
+    self.current_level
   }
 }
 
-impl<'a, T, I: Iterator<Item = (Box<dyn RtorIface + 'a>, T)>> Iterator
+impl<'a, T, I: Iterator<Item = Comm<(Box<dyn RtorIface + 'a>, T)>>> Iterator
   for StartingIntrinsicLevelProvider<'a, T, I>
 {
   type Item = (Level, Box<dyn RtorIface + 'a>, T);
 
   fn next(&mut self) -> Option<Self::Item> {
-    let (ret, propagate) = self.it.next()?;
-    let current_level = self.current_level;
-    let (delta, start_end) = ret.n_levels(self.db, self.side);
-    self.current_level += delta;
-    if let Some((start, _)) = start_end {
-      self.current_level += Level(
-        if let Some((_, d)) = self.last_flow_directions && d != start {
-          // in order not to break abstraction we must conservatively assume that even when going
-          // from input to output the level must be incremented because the output might depend on
-          // multiple inputs from the last sequence of inputs. Of course, if the last sequence of
-          // inputs consisted of only one atomic input, then we could do better, but currently even
-          // that is abstracted.
-          1
-        } else {
-          0
-        });
-      self.last_flow_directions = start_end;
+    let ret = self.it.next()?;
+    if let Comm::Data((ret, propagate)) = ret {
+      let current_level = self.current_level;
+      let delta = ret.n_levels(self.db, self.side);
+      self.current_level += delta;
+      Some((current_level, ret, propagate))
+    } else {
+      self.current_level += Level(1);
+      self.next()
     }
-    Some((current_level, ret, propagate))
   }
 }
 
@@ -260,10 +236,20 @@ impl<'a> RtorComptime for SrtorComptime<'a> {
         &mut map(
           inputs.clone(),
           Rc::new(
-            closure!(clone levels_map, |f: Rc<dyn Fn(Level) -> FixpointingStatus>| {
-              Rc::new(closure!(clone levels_map, |intrinsic_lower_bound| {
-                (*f)((*levels_map.borrow())[&intrinsic_lower_bound])
-              }))
+            closure!(clone levels_map, |f: Comm<Rc<dyn Fn(Comm<Level>) -> FixpointingStatus>>| {
+              f.map(|f: &Rc<dyn Fn(Comm<Level>) -> FixpointingStatus>| {
+                let f = Rc::clone(f);
+                // Note the extraction of `ret` into a local variable with a type annotation when it
+                // could equivalently be returned immediately. This is either a bug or a weird
+                // limitation of Rust's type inference system.
+                let ret: Rc<dyn Fn(Comm<Level>) -> FixpointingStatus> = Rc::new(
+                  closure!(clone levels_map, |intrinsic_lower_bound: Comm<Level>| {
+                    (*f)(intrinsic_lower_bound.map(
+                      |intrinsic_lower_bound| (*levels_map.borrow())[&intrinsic_lower_bound]
+                    ))
+                  }));
+                ret
+              })
             }),
           ),
         ),
@@ -289,11 +275,16 @@ impl<'a> RtorComptime for SrtorComptime<'a> {
 
   fn provide(&self, part: &[Inst], side: lf_types::Side) -> InputsIface {
     let mymap = Rc::clone(&self.levels_internal2external);
-    let f = Rc::new(move |intrinsic_level: Level| {
+    let f = Rc::new(move |intrinsic_level: Comm<Level>| {
+      let intrinsic_level = intrinsic_level.clone();
       let mymap = Rc::clone(&mymap);
-      let f =
-        move |lower_bound: Level| adjust(&mut mymap.borrow_mut(), lower_bound, intrinsic_level);
-      Rc::new(f) as Rc<dyn Fn(Level) -> FixpointingStatus>
+      let f = move |lower_bound: Comm<Level>| match (lower_bound, intrinsic_level.clone()) {
+        (Comm::Data(lower_bound), Comm::Data(intrinsic_level)) => {
+          adjust(&mut mymap.borrow_mut(), lower_bound, intrinsic_level)
+        }
+        _ => FixpointingStatus::Unchanged,
+      };
+      IIEltE::Data(Rc::new(f)) as IIEltE
     });
     map(self.iface.immut_provide(self.db, part, side, Level(0)), f)
   }
@@ -330,17 +321,35 @@ impl RtorIface for SrtorIface {
   ) -> FixpointingStatus {
     let mut changed = FixpointingStatus::Unchanged;
     for (starting_intrinsic_level, iface) in self.side_exact(db, side, part) {
-      changed |= iface.immut_accept(
-        db,
-        rest_or_empty(part),
-        side,
-        &mut map(
-          inputs_iface.clone(),
-          Rc::new(move |it| {
-            Rc::new(closure!(clone it, |level| it(level + starting_intrinsic_level)))
-          }),
-        ),
-      );
+      if let Comm::Data(iface) = iface {
+        changed |= iface.immut_accept(
+          db,
+          rest_or_empty(part),
+          side,
+          // &mut map(
+          //   inputs_iface.clone(),
+          //   Rc::new(move |it| {
+          //     Rc::new(closure!(clone it, |level| it(level + starting_intrinsic_level)))
+          //   }),
+          // ),
+          &mut map(
+            inputs_iface.clone(),
+            Rc::new(move |it| {
+              it.map(|it| {
+                // another case where the variable had to be factored out in order for it to type-check. Why?
+                let it: Rc<dyn Fn(Comm<Level>) -> FixpointingStatus> = it.clone();
+                let c: Rc<dyn Fn(Comm<Level>) -> FixpointingStatus> =
+                  Rc::new(move |level: Comm<Level>| {
+                    let ret: FixpointingStatus =
+                      it(level.map(|level| *level + starting_intrinsic_level));
+                    ret
+                  });
+                c
+              })
+            }),
+          ),
+        );
+      }
     }
     changed
   }
@@ -354,12 +363,17 @@ impl RtorIface for SrtorIface {
   ) -> LevelIterator {
     let mut sub_iterators = vec![];
     for (starting_intrinsic_level, iface) in self.side_exact(db, side, part) {
-      sub_iterators.push(iface.immut_provide(
-        db,
-        rest_or_empty(part),
-        side,
-        starting_level + starting_intrinsic_level,
-      ));
+      match iface {
+        Comm::Notify => todo!(),
+        Comm::Data(iface) => {
+          sub_iterators.push(iface.immut_provide(
+            db,
+            rest_or_empty(part),
+            side,
+            starting_level + starting_intrinsic_level,
+          ));
+        }
+      }
     }
     Box::new(ChainClone::new(sub_iterators))
   }
@@ -393,12 +407,19 @@ impl RtorIface for SrtorIface {
   ) -> HashSet<Level> {
     let mut ret = HashSet::new();
     for (starting_intrinsic_level, iface) in self.side_exact(db, side, part) {
-      ret.extend(iface.immut_provide_unique(
-        db,
-        rest_or_empty(part),
-        side,
-        starting_level + starting_intrinsic_level,
-      ));
+      match iface {
+        Comm::Notify => {
+          ret.insert(starting_intrinsic_level);
+        }
+        Comm::Data(iface) => {
+          ret.extend(iface.immut_provide_unique(
+            db,
+            rest_or_empty(part),
+            side,
+            starting_level + starting_intrinsic_level,
+          ));
+        }
+      }
     }
     ret
   }
@@ -407,31 +428,29 @@ impl RtorIface for SrtorIface {
     db: &'db dyn Db,
     side: SideMatch,
     part: &[Inst],
-  ) -> Box<dyn Iterator<Item = (Level, SideMatch, Box<dyn RtorIface + 'db>)> + 'db> {
+  ) -> Box<dyn Iterator<Item = (Level, SideMatch, Comm<Box<dyn RtorIface + 'db>>)> + 'db> {
     let part = part.to_vec();
     let ifaces = StartingIntrinsicLevelProvider::new(iface(self.sctor(db), db, side)
       .map(|child| {
+        child.map(|child| {
         let [child, tail @ ..] = &child.iref(db)[..] else { unreachable!("refs should never be empty if the ast passed parsing/validation") };
         let child = iface_of(db, child.ctor(db));
-        (child, tail.to_vec())
+        (child, tail.to_vec()) })
       }), db, side)
       .filter_map(closure!(clone side, clone part, |(level, child, tail)| {
         let longer = sequence_max(&tail, rest_or_empty(&part))?;
-        let ret: Box<dyn Iterator<Item = (Level, SideMatch, Box<dyn RtorIface + 'db>)>> = child.side(db, side, longer);
+        let ret: Box<dyn Iterator<Item = (Level, SideMatch, Comm<Box<dyn RtorIface + 'db>>)>> = child.side(db, side, longer);
         Some(ret.map(move |(level_unadjusted, sm, iface)| (level_unadjusted + level, sm, iface)))
       }))
       .flatten();
     Box::new(ifaces)
   }
 
-  fn n_levels(
-    &self,
-    db: &dyn Db,
-    side: SideMatch,
-  ) -> (Level, Option<(FlowDirection, FlowDirection)>) {
+  fn n_levels(&self, db: &dyn Db, side: SideMatch) -> Level {
     // FIXME: there is some duplication here with side
     StartingIntrinsicLevelProvider::new(
-      iface(self.sctor(db), db, side).map(|it| (iface_of(db, it.iref(db)[0].ctor(db)), ())),
+      iface(self.sctor(db), db, side)
+        .map(|it| it.map(|it| (iface_of(db, it.iref(db)[0].ctor(db)), ()))),
       db,
       side,
     )

@@ -7,7 +7,7 @@ use std::{
 };
 
 use irlf_db::ir::Inst;
-use lf_types::{FlowDirection, Level, Side, SideMatch};
+use lf_types::{Comm, FlowDirection, Level, Side, SideMatch};
 
 use crate::{
   iterators::cloneiterator::iterator_new,
@@ -40,15 +40,10 @@ impl Debug for BiFunRtorIface {
 }
 
 impl RtorIface for BiFunRtorIface {
-  fn n_levels(
-    &self,
-    _db: &dyn crate::Db,
-    side: SideMatch,
-  ) -> (Level, Option<(FlowDirection, FlowDirection)>) {
+  fn n_levels(&self, _db: &dyn crate::Db, side: SideMatch) -> Level {
     match side {
-      SideMatch::One(Side::Left) => (Level(0), Some((FlowDirection::In, FlowDirection::In))),
-      SideMatch::One(Side::Right) => (Level(0), Some((FlowDirection::Out, FlowDirection::Out))),
-      SideMatch::Both => (Level(1), Some((FlowDirection::In, FlowDirection::Out))),
+      SideMatch::One(_) => Level(0),
+      SideMatch::Both => Level(1),
     }
   }
 
@@ -62,7 +57,7 @@ impl RtorIface for BiFunRtorIface {
     require_empty(part);
     match side {
       Side::Left => HashSet::from([starting_level]),
-      Side::Right => HashSet::from([]),
+      Side::Right => HashSet::from([starting_level + Level(1)]),
     }
   }
 
@@ -76,7 +71,7 @@ impl RtorIface for BiFunRtorIface {
     require_empty(part);
     if side == Side::Right {
       let first = inputs_iface.next().unwrap();
-      first(Level(1))
+      first.unwrap()(Comm::Data(Level(1)))
     } else {
       FixpointingStatus::Unchanged
     }
@@ -85,11 +80,19 @@ impl RtorIface for BiFunRtorIface {
   fn immut_provide(
     &self,
     _db: &dyn crate::Db,
-    _part: &[Inst],
-    _side: Side,
+    part: &[Inst],
+    side: Side,
     starting_level: Level,
   ) -> LevelIterator {
-    iterator_new(vec![starting_level])
+    require_empty(part);
+    match side {
+      Side::Left => iterator_new(vec![
+        Comm::Data(starting_level),
+        Comm::Data(starting_level),
+        Comm::Notify,
+      ]),
+      Side::Right => iterator_new(vec![Comm::Data(starting_level + Level(1))]),
+    }
   }
 
   fn comptime_realize<'db>(&self, db: &'db dyn crate::Db) -> Box<dyn RtorComptime + 'db> {
@@ -109,10 +112,11 @@ impl RtorIface for BiFunRtorIface {
     _db: &'db dyn crate::Db,
     _side: SideMatch,
     part: &[Inst],
-  ) -> Box<dyn Iterator<Item = (Level, SideMatch, Box<dyn RtorIface + 'db>)> + 'db> {
+  ) -> Box<dyn Iterator<Item = (Level, SideMatch, Comm<Box<dyn RtorIface + 'db>>)> + 'db> {
     require_empty(part);
     let cself: Box<dyn RtorIface> = Box::new(self.clone());
-    Box::new(vec![(Level(0), SideMatch::Both, cself)].into_iter()) // FIXME: This assumes that the input width is only 1?
+    Box::new(vec![(Level(0), SideMatch::Both, Comm::Data(cself))].into_iter())
+    // FIXME: This assumes that the input width is only 1?
   }
 
   fn iface_id(&self) -> u128 {

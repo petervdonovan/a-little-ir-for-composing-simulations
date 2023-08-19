@@ -47,6 +47,8 @@ pub fn lctor_of(db: &dyn crate::Db, lctor: LibCtor) -> Box<dyn RtorIface> {
 
 #[cfg(test)]
 mod tests {
+  use std::collections::HashSet;
+
   use expect_test::{expect, Expect};
   use irlf_db::from_text;
   use lf_types::{Level, Side};
@@ -55,23 +57,27 @@ mod tests {
 
   use super::*;
 
+  fn sort<T: Ord>(v: HashSet<T>) -> Vec<T> {
+    let mut v: Vec<_> = v.into_iter().collect();
+    v.sort();
+    v
+  }
+
   fn shallow_expect(text: &str, expect: Expect) {
     let db = GriTestDatabase::default();
     let (program, _inst2sym) = from_text(text, &db);
     let iface = iface_of(&db, program.main(&db));
-    let levels = format!("{:?}", iface.levels(&db));
-    let expected = expect![["{}"]];
-    expected.assert_eq(&levels);
     let levels = format!(
-      "left: {:?}\nright: {:?}\nunique_left: {:?}\nunique_right: {:?}",
+      "levels: {:?}\nleft: {:?}\nright: {:?}\nunique_left: {:?}\nunique_right: {:?}",
+      sort(iface.levels(&db)),
       iface
         .immut_provide(&db, &[], Side::Left, Level(0))
         .collect::<Vec<_>>(),
       iface
         .immut_provide(&db, &[], Side::Right, Level(0))
         .collect::<Vec<_>>(),
-      iface.immut_provide_unique(&db, &[], Side::Left, Level(0)),
-      iface.immut_provide_unique(&db, &[], Side::Right, Level(0))
+      sort(iface.immut_provide_unique(&db, &[], Side::Left, Level(0))),
+      sort(iface.immut_provide_unique(&db, &[], Side::Right, Level(0)))
     );
     expect.assert_eq(&levels);
   }
@@ -116,6 +122,7 @@ rtor1 3
   msum 103 = 1
   ---
   L 102
+  L -
   R 103
   ---
   200 102 103
@@ -127,16 +134,22 @@ rtor1 3
   fn test0() {
     let text = BASIC_NO_MERGING;
     let expect = expect![[r#"
-        left: [Level(0), Level(0)]
-        right: [Level(0), Level(0)]
-        unique_left: {}
-        unique_right: {}"#]];
+        levels: [Level(0)]
+        left: [Data(Level(0)), Data(Level(0))]
+        right: [Data(Level(0)), Data(Level(0))]
+        unique_left: [Level(0)]
+        unique_right: [Level(0)]"#]];
     shallow_expect(text, expect);
   }
   #[test]
   fn test1() {
     let text = MERGING;
-    let expect = expect![[r#""#]];
+    let expect = expect![[r#"
+        levels: [Level(0), Level(1)]
+        left: [Data(Level(0)), Data(Level(0))]
+        right: [Data(Level(1))]
+        unique_left: [Level(0)]
+        unique_right: [Level(1)]"#]];
     shallow_expect(text, expect);
   }
 }

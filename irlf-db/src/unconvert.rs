@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use lf_types::{CtorId, IfaceNode};
+use lf_types::{Comm, CtorId, IfaceNode};
 
 use crate::Db;
 
@@ -59,7 +59,7 @@ fn unconvert_ctor(
         iface: sctor
           .iface(db)
           .iter()
-          .map(|iface| IfaceNode(iface.0, unconvert_instref(db, &iface.1)))
+          .map(|iface| IfaceNode(iface.0, unconvert_iface_elt_e(db, &iface.1)))
           .collect(),
         connections: sctor
           .connections(db)
@@ -87,6 +87,13 @@ fn unconvert_inst(db: &dyn Db, inst: &crate::ir::Inst) -> irlf_ser::ir::CtorCall
 
 fn unconvert_instref(db: &dyn Db, iref: &crate::ir::InstRef) -> irlf_ser::ir::InstRef {
   irlf_ser::ir::InstRef(iref.iref(db).iter().map(|inst| inst.id(db)).collect())
+}
+
+fn unconvert_iface_elt_e(
+  db: &dyn Db,
+  iref: &Comm<crate::ir::InstRef>,
+) -> Comm<irlf_ser::ir::InstRef> {
+  iref.map(|elt| unconvert_instref(db, elt))
 }
 
 fn unconvert_connection(db: &dyn Db, c: &crate::ir::Connection) -> irlf_ser::ir::Connection {

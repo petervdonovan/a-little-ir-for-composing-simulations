@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap};
 
 use irlf_ser::visitor::Visitor;
-use lf_types::{CtorId, Iface, IfaceNode, InstId};
+use lf_types::{Comm, CtorId, Iface, IfaceNode, InstId};
 
 use crate::Db;
 
@@ -131,6 +131,15 @@ fn convert_instref(
   )
 }
 
+fn convert_iface_elt_e(
+  db: &dyn Db,
+  ctorid2ctor: &HashMap<CtorId, irlf_ser::ir::Ctor>,
+  instid2inst: &HashMap<&InstId, &irlf_ser::ir::CtorCall>,
+  iref: &Comm<irlf_ser::ir::IfaceElt>,
+) -> Comm<crate::ir::IfaceElt> {
+  iref.map(|elt| convert_instref(db, ctorid2ctor, instid2inst, elt))
+}
+
 fn convert_iface(
   db: &dyn Db,
   instid2inst: &HashMap<&InstId, &irlf_ser::ir::CtorCall>,
@@ -142,7 +151,7 @@ fn convert_iface(
     .map(|node| {
       IfaceNode(
         node.0,
-        convert_instref(db, ctorid2ctor, instid2inst, &node.1),
+        convert_iface_elt_e(db, ctorid2ctor, instid2inst, &node.1),
       )
     })
     .collect()

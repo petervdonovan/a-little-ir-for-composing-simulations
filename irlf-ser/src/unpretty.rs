@@ -5,7 +5,7 @@ use crate::ir::{
   BinaryCtor, Connection, Ctor, CtorCall, IfaceElt, InstRef, LibCtor, Program, StructlikeCtor, Sym,
 };
 use crate::lex::{Range, Token, TokenStream};
-use lf_types::{CtorId, DebugOnlyId, IfaceNode, InstId, Side, SideMatch};
+use lf_types::{Comm, CtorId, DebugOnlyId, IfaceNode, InstId, Side, SideMatch};
 
 /// Extracts a program from its pretty-printed format.
 ///
@@ -63,10 +63,15 @@ impl<'a> Unpretty<'a> for Side {
 
 impl<'a> Unpretty<'a> for IfaceNode<IfaceElt> {
   fn unpretty(toks: &mut TokenStream<'a>) -> Result<Self, (String, Range)> {
-    Ok(IfaceNode(
-      SideMatch::unpretty(toks)?,
-      InstRef::unpretty(toks)?,
-    ))
+    let side = SideMatch::unpretty(toks)?;
+    let bak = *toks;
+    let elt = if toks.token(Some("- or an iref"))?.s == "-" {
+      Comm::Notify
+    } else {
+      *toks = bak;
+      Comm::Data(InstRef::unpretty(toks)?)
+    };
+    Ok(IfaceNode(side, elt))
   }
 }
 
@@ -299,7 +304,7 @@ rtor1 0x4
   baz 87 = 0x3
   bar 88 = 0x4
   ---
-  L 87 R 88
+  L 87 R 88.89
   ---
   91 88 87
   92 87 87

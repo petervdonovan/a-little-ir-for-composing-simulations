@@ -1,25 +1,19 @@
 use dyn_clone::DynClone;
 use irlf_db::ir::Inst;
-use lf_types::{FlowDirection, Level, Net, Side, SideMatch};
+use lf_types::{Comm, FlowDirection, Level, Net, Side, SideMatch};
 use std::{any::Any, collections::HashSet, marker::PhantomData, rc::Rc};
 
 use crate::{iterators::cloneiterator::CloneIterator, rtorimpl::FixpointingStatus, Db};
-// pub trait InputsIfaceIterator<'a>:
-//   Iterator<Item = ShareLevelLowerBound<'a>> + 'a + DynClone
-// {
-// }
-// dyn_clone::clone_trait_object!(InputsIfaceIterator<'_>);
-// impl<'a> InputsIfaceIterator<'a> for dyn CloneIterator<ShareLevelLowerBound<'a>> {}
 pub type SetPort<'db> = Box<dyn Fn(&dyn Any) + 'db>;
 pub type Inputs<'a> = Box<dyn Iterator<Item = SetPort<'a>> + 'a>;
 pub type InputsGiver<'a> = Box<dyn Fn() -> Inputs<'a> + 'a>;
 
-pub type ShareLevelLowerBound = Rc<dyn Fn(Level) -> FixpointingStatus>;
-dyn_clone::clone_trait_object!(CloneIterator<ShareLevelLowerBound>);
-dyn_clone::clone_trait_object!(CloneIterator<Level>);
-pub type InputsIface = Box<dyn CloneIterator<ShareLevelLowerBound>>;
+pub type IIEltE = Comm<Rc<dyn Fn(Comm<Level>) -> FixpointingStatus>>;
+dyn_clone::clone_trait_object!(CloneIterator<IIEltE>);
+dyn_clone::clone_trait_object!(CloneIterator<Comm<Level>>);
+pub type InputsIface = Box<dyn CloneIterator<IIEltE>>;
 
-pub type LevelIterator = Box<dyn CloneIterator<Level>>;
+pub type LevelIterator = Box<dyn CloneIterator<Comm<Level>>>;
 
 pub struct EmptyIterator<'db, Item> {
   phantom: PhantomData<&'db Item>,
@@ -46,7 +40,7 @@ pub fn trivial_inputs_giver<'db>() -> Inputs<'db> {
   })
 }
 pub fn trivial_inputs_iface_giver() -> InputsIface {
-  let iterator = EmptyIterator::<ShareLevelLowerBound> {
+  let iterator = EmptyIterator::<IIEltE> {
     phantom: PhantomData,
   };
   Box::new(iterator)
@@ -106,11 +100,7 @@ pub trait RtorIface: DynClone + std::fmt::Debug {
   ///
   /// This will typically equal the initial flow direction, the number of internal flow direction
   /// changes, and the final flow direction, all on the given side only.
-  fn n_levels(
-    &self,
-    db: &dyn Db,
-    side: SideMatch,
-  ) -> (Level, Option<(FlowDirection, FlowDirection)>);
+  fn n_levels(&self, db: &dyn Db, side: SideMatch) -> Level;
   /// States the levels at which an instance of self is to receive a TAGL.
   ///
   /// Similar to `immut_provide`, but finite and without repetition nor order nor a guarantee that
@@ -129,9 +119,9 @@ pub trait RtorIface: DynClone + std::fmt::Debug {
     ret.extend(self.immut_provide_unique(db, &[], Side::Right, Level(0)));
     ret
   }
-  /// If the intrinsic level $n$ of `self` sends to a given element $f$ of the provided
-  /// `inputs_iface`, invoke $f$ on $n$. It is the responsibility of the caller to adjust the
-  /// intrisic level $n$ according to any offsets as needed.
+  /// If the intrinsic level `n` of `self` sends to a given element `f` of the provided
+  /// `inputs_iface`, invoke `f` on `n`. It is the responsibility of the caller to adjust the
+  /// intrisic level `n` according to any offsets as needed.
   ///
   /// `f` should be idempotent in the sense that invoking `f` multiple times on the same arguments
   /// should have the same effect as invoking `f` once on those arguments.
@@ -174,14 +164,14 @@ pub trait RtorIface: DynClone + std::fmt::Debug {
     db: &'db dyn Db,
     side: SideMatch,
     part: &[Inst],
-  ) -> Box<dyn Iterator<Item = (Level, SideMatch, Box<dyn RtorIface + 'db>)> + 'db>;
+  ) -> Box<dyn Iterator<Item = (Level, SideMatch, Comm<Box<dyn RtorIface + 'db>>)> + 'db>;
   /// Returns the rtorifaces exposed on the given side by the given part of this.
   fn side_exact<'db>(
     &self,
     db: &'db dyn Db,
     side: Side,
     part: &[Inst],
-  ) -> Box<dyn Iterator<Item = (Level, Box<dyn RtorIface + 'db>)> + 'db> {
+  ) -> Box<dyn Iterator<Item = (Level, Comm<Box<dyn RtorIface + 'db>>)> + 'db> {
     Box::new(
       self
         .side(db, SideMatch::One(side), part)
