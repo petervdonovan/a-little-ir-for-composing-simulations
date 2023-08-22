@@ -1,8 +1,6 @@
-use crate::iterators::cloneiterator::{iterator_new, map};
-use crate::iterators::lazyclone::LazyIterClone;
+use crate::iterators::connectioniterator::{iterator_new, map, Nesting};
 use crate::rtor::{
-  trivial_inputs_giver, trivial_inputs_iface_giver, IIEltE, InputsGiver, InputsIface,
-  LevelIterator, Rtor, RtorComptime, RtorIface, SetPort,
+  EmptyIterator, Inputs, InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface, SetPort,
 };
 use crate::Db;
 use irlf_db::ir::Inst;
@@ -30,12 +28,12 @@ impl std::fmt::Debug for FunRtorIface {
   }
 }
 
-struct FunRtorComptime {
-  downstream: Rc<RefCell<Option<InputsIface>>>,
+struct FunRtorComptime<'a> {
+  downstream: Rc<RefCell<Option<InputsIface<'a>>>>,
   level: Rc<Cell<Level>>,
 }
 struct FunRtor<'db> {
-  downstream: Option<InputsGiver<'db>>,
+  downstream: Option<Inputs<'db>>,
   f: Rc<dyn Fn(u64) -> u64>,
   phantom: PhantomData<&'db u64>,
 }
@@ -50,7 +48,7 @@ impl FunRtorIface {
 }
 
 impl<'db> Rtor<'db> for FunRtor<'db> {
-  fn accept(&mut self, side: Side, inputs: InputsGiver<'db>) -> bool {
+  fn accept(&mut self, side: Side, inputs: Inputs<'db>) -> bool {
     if let Side::Right = side {
       self.downstream = Some(inputs);
       false
@@ -59,24 +57,23 @@ impl<'db> Rtor<'db> for FunRtor<'db> {
     }
   }
 
-  fn provide(&'db self, side: Side) -> InputsGiver<'db> {
-    if let Side::Right = side {
-      return Box::new(trivial_inputs_giver);
-    }
-    Box::new(|| {
-      let fclone = self.f.clone();
-      Box::new((self.downstream.as_ref().unwrap())().map(move |it| {
-        let fcloneclone = fclone.clone();
-        let mapped_it = move |sth: &dyn Any| {
-          let sth = sth.downcast_ref::<u64>().unwrap();
-          #[allow(clippy::redundant_closure_call)]
-          let mapped = fcloneclone(*sth);
-          (*it)(&mapped)
-        };
-        let b: SetPort<'db> = Box::new(mapped_it);
-        b
-      }))
-    })
+  fn provide(&'db self, side: Side, nesting: Nesting) -> Inputs<'db> {
+    // if let Side::Right = side {
+    //   return EmptyIterator::new(nesting);
+    // }
+    // let fclone = self.f.clone();
+    todo!()
+    // map(*self.downstream.as_ref().unwrap(), move |it| {
+    //   let fcloneclone = fclone.clone();
+    //   let mapped_it = move |sth: &dyn Any| {
+    //     let sth = sth.downcast_ref::<u64>().unwrap();
+    //     #[allow(clippy::redundant_closure_call)]
+    //     let mapped = fcloneclone(*sth);
+    //     (*it)(&mapped)
+    //   };
+    //   let b: SetPort<'db> = Box::new(mapped_it);
+    //   b
+    // })
   }
 
   fn step_forward(&mut self, _distance: u64) -> Option<Net> {
@@ -90,25 +87,25 @@ impl<'db> Rtor<'db> for FunRtor<'db> {
   }
 }
 
-impl RtorComptime for FunRtorComptime {
+impl<'a> RtorComptime<'a> for FunRtorComptime<'a> {
   fn iterate_levels(&mut self) -> FixpointingStatus {
     FixpointingStatus::Unchanged
   }
   fn levels(&self) -> HashSet<Level> {
     HashSet::new() // never notify; fn-like rtors react immediately
   }
-  fn accept(&mut self, part: &[Inst], side: Side, inputs: &mut InputsIface) {
+  fn accept(&mut self, part: &[Inst], side: Side, inputs: &mut InputsIface<'a>) {
     require_empty(part);
     if let Side::Right = side {
       RefCell::replace(self.downstream.as_ref(), Some(inputs.clone()));
       inputs.next(); // ! This assumes that the width of self is 1 !
     }
   }
-  fn provide(&self, part: &[Inst], side: Side) -> InputsIface {
+  fn provide(&self, part: &[Inst], side: Side, nesting: Nesting) -> InputsIface<'a> {
     require_empty(part);
     // trivial_inputs_iface_giver()
     if let Side::Right = side {
-      trivial_inputs_iface_giver()
+      EmptyIterator::new(nesting)
     } else {
       // let self_level = Rc::clone(&self.level);
       // map(
@@ -164,21 +161,26 @@ impl RtorIface for FunRtorIface {
       FixpointingStatus::Unchanged
     }
   }
-  fn immut_provide(
+  fn immut_provide<'db>(
     &self,
-    _db: &dyn Db,
+    _db: &'db dyn Db,
     _part: &[Inst],
     _side: Side,
     starting_level: Level,
-  ) -> LevelIterator {
-    iterator_new(vec![Comm::Data(starting_level)])
+    nesting: Nesting,
+  ) -> LevelIterator<'db> {
+    iterator_new(
+      nesting,
+      Box::new(self.clone()),
+      vec![Comm::Data(starting_level)],
+    )
   }
 
   fn n_levels(&self, _db: &dyn Db, side: SideMatch) -> Level {
     Level(0)
   }
 
-  fn comptime_realize(&self, _db: &dyn Db) -> Box<dyn RtorComptime> {
+  fn comptime_realize<'db>(&self, _db: &'db dyn Db) -> Box<dyn RtorComptime<'db> + 'db> {
     Box::new(FunRtorComptime {
       downstream: Rc::new(RefCell::new(None)),
       level: Rc::new(Cell::new(Level(0))), // TODO: check?

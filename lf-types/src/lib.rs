@@ -31,10 +31,6 @@ impl SideMatch {
   }
 }
 
-pub enum Nesting {
-  Up,
-  Down,
-}
 #[derive(
   Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord, Add, AddAssign,
 )]

@@ -53,7 +53,7 @@ mod tests {
   use irlf_db::from_text;
   use lf_types::{Level, Side};
 
-  use crate::GriTestDatabase;
+  use crate::{iterators::connectioniterator::Nesting, GriTestDatabase};
 
   use super::*;
 
@@ -71,10 +71,10 @@ mod tests {
       "levels: {:?}\nleft: {:?}\nright: {:?}\nunique_left: {:?}\nunique_right: {:?}",
       sort(iface.levels(&db)),
       iface
-        .immut_provide(&db, &[], Side::Left, Level(0))
+        .immut_provide(&db, &[], Side::Left, Level(0), Nesting::default())
         .collect::<Vec<_>>(),
       iface
-        .immut_provide(&db, &[], Side::Right, Level(0))
+        .immut_provide(&db, &[], Side::Right, Level(0), Nesting::default())
         .collect::<Vec<_>>(),
       sort(iface.immut_provide_unique(&db, &[], Side::Left, Level(0))),
       sort(iface.immut_provide_unique(&db, &[], Side::Right, Level(0)))

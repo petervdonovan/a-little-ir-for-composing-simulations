@@ -1,17 +1,18 @@
 use std::{cell::RefCell, rc::Rc};
 
-pub struct LazyIterClone<Item, CloneIterator: Iterator<Item = Item> + ?Sized>
+pub struct LazyIterClone<Item, ConnectionIterator: Iterator<Item = Item> + ?Sized>
 where
-  Box<CloneIterator>: Clone,
+  Box<ConnectionIterator>: Clone,
 {
-  backing_iter: Rc<RefCell<Option<Box<CloneIterator>>>>,
-  backing_iter_clone: Option<Box<CloneIterator>>,
+  backing_iter: Rc<RefCell<Option<Box<ConnectionIterator>>>>,
+  backing_iter_clone: Option<Box<ConnectionIterator>>,
 }
-impl<Item, CloneIterator: Iterator<Item = Item> + ?Sized> LazyIterClone<Item, CloneIterator>
+impl<Item, ConnectionIterator: Iterator<Item = Item> + ?Sized>
+  LazyIterClone<Item, ConnectionIterator>
 where
-  Box<CloneIterator>: Clone,
+  Box<ConnectionIterator>: Clone,
 {
-  pub fn new(source: Rc<RefCell<Option<Box<CloneIterator>>>>) -> Self {
+  pub fn new(source: Rc<RefCell<Option<Box<ConnectionIterator>>>>) -> Self {
     LazyIterClone {
       backing_iter: source,
       backing_iter_clone: None,
@@ -19,10 +20,10 @@ where
   }
 }
 
-impl<Item, CloneIterator: Iterator<Item = Item> + ?Sized> Clone
-  for LazyIterClone<Item, CloneIterator>
+impl<Item, ConnectionIterator: Iterator<Item = Item> + ?Sized> Clone
+  for LazyIterClone<Item, ConnectionIterator>
 where
-  Box<CloneIterator>: Clone,
+  Box<ConnectionIterator>: Clone,
 {
   fn clone(&self) -> Self {
     LazyIterClone {
@@ -32,10 +33,10 @@ where
   }
 }
 
-impl<Item, CloneIterator: Iterator<Item = Item> + ?Sized> Iterator
-  for LazyIterClone<Item, CloneIterator>
+impl<Item, ConnectionIterator: Iterator<Item = Item> + ?Sized> Iterator
+  for LazyIterClone<Item, ConnectionIterator>
 where
-  Box<CloneIterator>: Clone,
+  Box<ConnectionIterator>: Clone,
 {
   type Item = Item;
 

@@ -5,13 +5,17 @@ use std::{
   rc::Rc,
 };
 
-use crate::{rtor::IIEltE, Db};
+use crate::{
+  iterators::connectioniterator::{ConnectionIterator, Nesting},
+  rtor::{IIEltE, Inputs},
+  Db,
+};
 use irlf_db::ir::{Inst, InstRef, StructlikeCtor};
-use lf_types::{Comm, FlowDirection, Iface, Level, Side, SideMatch};
+use lf_types::{Comm, FlowDirection, Level, Side, SideMatch};
 
 use crate::{
-  iterators::cloneiterator::map,
-  rtor::{InputsGiver, InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface},
+  iterators::connectioniterator::map,
+  rtor::{InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface},
 };
 
 use closure::closure;
@@ -20,17 +24,17 @@ use super::{iface_of, FixpointingStatus};
 use crate::iterators::chainclone::ChainClone;
 
 // dyn_clone::clone_trait_object!(ChainClone<Level, dyn LevelIterator<Item = Level>>);
-// impl CloneIterator<Level> for ChainClone<Level, Box<dyn CloneIterator<Level>>> {}
+// impl ConnectionIterator<Level> for ChainClone<Level, Box<dyn ConnectionIterator<Level>>> {}
 
 pub struct Srtor<'db> {
-  downstream: Option<InputsGiver<'db>>,
+  downstream: Option<Inputs<'db>>,
 }
 
 pub struct SrtorComptime<'a> {
   iface: SrtorIface,
   db: &'a dyn Db,
   levels_internal2external: Rc<RefCell<BTreeMap<Level, Level>>>,
-  external_connections: Vec<(Vec<Inst>, Side, InputsIface)>,
+  external_connections: Vec<(Vec<Inst>, Side, InputsIface<'a>)>,
 }
 
 #[salsa::tracked]
@@ -88,11 +92,11 @@ fn iface(sctor: StructlikeCtor, db: &dyn Db, side: SideMatch) -> SideIterator {
 }
 
 impl<'db> Rtor<'db> for Srtor<'db> {
-  fn accept(&mut self, side: lf_types::Side, inputs: crate::rtor::InputsGiver<'db>) -> bool {
+  fn accept(&mut self, side: lf_types::Side, inputs: crate::rtor::Inputs<'db>) -> bool {
     todo!()
   }
 
-  fn provide(&'db self, side: lf_types::Side) -> crate::rtor::InputsGiver<'db> {
+  fn provide(&'db self, side: lf_types::Side, nesting: Nesting) -> crate::rtor::Inputs<'db> {
     todo!()
   }
 
@@ -111,12 +115,13 @@ impl<'db> Rtor<'db> for Srtor<'db> {
 
 fn connect<'db>(
   db: &dyn Db,
-  children: &mut HashMap<Inst, Box<dyn RtorComptime + 'db>>,
+  children: &mut HashMap<Inst, Box<dyn RtorComptime<'db> + 'db>>,
   sctor: StructlikeCtor,
 ) {
   let mut connect =
     |ref_accept: Vec<Inst>, ref_provide: Vec<Inst>, side_accept: Side, side_provide: Side| {
-      let mut provide1 = children[&ref_provide[0]].provide(&ref_provide[1..], side_accept);
+      let mut provide1 =
+        children[&ref_provide[0]].provide(&ref_provide[1..], side_accept, Nesting::default());
       children.get_mut(&ref_accept[0]).unwrap().accept(
         &ref_accept[1..],
         side_provide,
@@ -222,7 +227,7 @@ fn rest_or_empty<T>(slice: &[T]) -> &[T] {
   }
 }
 
-impl<'a> RtorComptime for SrtorComptime<'a> {
+impl<'a> RtorComptime<'a> for SrtorComptime<'a> {
   fn iterate_levels(&mut self) -> FixpointingStatus {
     // Do the accept. If fixpointing is just the same as doing the accept, then maybe we should not
     // bother with this function and instead just do the accept (connection) many times.
@@ -267,13 +272,13 @@ impl<'a> RtorComptime for SrtorComptime<'a> {
       .collect()
   }
 
-  fn accept(&mut self, part: &[Inst], side: lf_types::Side, inputs: &mut InputsIface) {
+  fn accept(&mut self, part: &[Inst], side: lf_types::Side, inputs: &mut InputsIface<'a>) {
     self
       .external_connections
       .push((part.to_vec(), side, inputs.clone()));
   }
 
-  fn provide(&self, part: &[Inst], side: lf_types::Side) -> InputsIface {
+  fn provide(&self, part: &[Inst], side: lf_types::Side, nesting: Nesting) -> InputsIface<'a> {
     let mymap = Rc::clone(&self.levels_internal2external);
     let f = Rc::new(move |intrinsic_level: Comm<Level>| {
       let intrinsic_level = intrinsic_level.clone();
@@ -286,7 +291,12 @@ impl<'a> RtorComptime for SrtorComptime<'a> {
       };
       IIEltE::Data(Rc::new(f)) as IIEltE
     });
-    map(self.iface.immut_provide(self.db, part, side, Level(0)), f)
+    map(
+      self
+        .iface
+        .immut_provide(self.db, part, side, Level(0), nesting),
+      f,
+    )
   }
 
   fn lower_bound(
@@ -354,28 +364,36 @@ impl RtorIface for SrtorIface {
     changed
   }
 
-  fn immut_provide(
+  fn immut_provide<'db>(
     &self,
-    db: &dyn Db,
+    db: &'db dyn Db,
     part: &[Inst],
     side: Side,
     starting_level: Level,
-  ) -> LevelIterator {
-    let mut sub_iterators = vec![];
+    nesting: Nesting,
+  ) -> LevelIterator<'db> {
+    let mut sub_iterators: Vec<
+      Rc<dyn Fn(Nesting) -> Box<dyn ConnectionIterator<'db, Item = _> + 'db> + 'db>,
+    > = vec![];
+    let rc_part = Rc::new(part.to_vec());
     for (starting_intrinsic_level, iface) in self.side_exact(db, side, part) {
       match iface {
         Comm::Notify => todo!(),
         Comm::Data(iface) => {
-          sub_iterators.push(iface.immut_provide(
-            db,
-            rest_or_empty(part),
-            side,
-            starting_level + starting_intrinsic_level,
-          ));
+          let rc_part = rc_part.clone();
+          sub_iterators.push(Rc::new(move |nesting| {
+            iface.immut_provide(
+              db,
+              rest_or_empty(&rc_part),
+              side,
+              starting_level + starting_intrinsic_level,
+              nesting, // FIXME: How tf does this compile
+            )
+          }));
         }
       }
     }
-    Box::new(ChainClone::new(sub_iterators))
+    Box::new(ChainClone::new(nesting, Box::new(*self), sub_iterators))
   }
 
   fn realize<'db>(
@@ -394,7 +412,7 @@ impl RtorIface for SrtorIface {
     todo!("this can be implemented later after the level assignment algorithm passes unit tests")
   }
 
-  fn comptime_realize<'db>(&self, db: &'db dyn Db) -> Box<dyn RtorComptime + 'db> {
+  fn comptime_realize<'db>(&self, db: &'db dyn Db) -> Box<dyn RtorComptime<'db> + 'db> {
     Box::new(SrtorComptime::new(*self, db))
   }
 

@@ -3,56 +3,79 @@ use irlf_db::ir::Inst;
 use lf_types::{Comm, FlowDirection, Level, Net, Side, SideMatch};
 use std::{any::Any, collections::HashSet, marker::PhantomData, rc::Rc};
 
-use crate::{iterators::cloneiterator::CloneIterator, rtorimpl::FixpointingStatus, Db};
+use crate::{
+  iterators::connectioniterator::{ConnectionIterator, Nesting},
+  rtorimpl::FixpointingStatus,
+  Db,
+};
 pub type SetPort<'db> = Box<dyn Fn(&dyn Any) + 'db>;
-pub type Inputs<'a> = Box<dyn Iterator<Item = SetPort<'a>> + 'a>;
-pub type InputsGiver<'a> = Box<dyn Fn() -> Inputs<'a> + 'a>;
+pub type Inputs<'a> = Box<dyn ConnectionIterator<'a, Item = SetPort<'a>> + 'a>;
 
 pub type IIEltE = Comm<Rc<dyn Fn(Comm<Level>) -> FixpointingStatus>>;
-dyn_clone::clone_trait_object!(CloneIterator<IIEltE>);
-dyn_clone::clone_trait_object!(CloneIterator<Comm<Level>>);
-pub type InputsIface = Box<dyn CloneIterator<IIEltE>>;
+// dyn_clone::clone_trait_object!(ConnectionIterator<Item = IIEltE>);
+// dyn_clone::clone_trait_object!(ConnectionIterator<Item = Comm<Level>>);
+pub type InputsIface<'a> = Box<dyn ConnectionIterator<'a, Item = IIEltE> + 'a>;
 
-pub type LevelIterator = Box<dyn CloneIterator<Comm<Level>>>;
+pub type LevelIterator<'a> = Box<dyn ConnectionIterator<'a, Item = Comm<Level>> + 'a>;
 
-pub struct EmptyIterator<'db, Item> {
-  phantom: PhantomData<&'db Item>,
+pub struct EmptyIterator<'a, Item> {
+  nesting: Nesting,
+  phantom: PhantomData<&'a Item>,
 }
-impl<'db, Item> Clone for EmptyIterator<'db, Item> {
+impl<'a, Item: 'static> EmptyIterator<'a, Item> {
+  pub fn new(nesting: Nesting) -> Box<dyn ConnectionIterator<'a, Item = Item> + 'a> {
+    Box::new(EmptyIterator {
+      nesting,
+      phantom: PhantomData,
+    })
+  }
+}
+impl<'a, Item> Clone for EmptyIterator<'a, Item> {
   fn clone(&self) -> Self {
     EmptyIterator {
+      nesting: self.nesting.clone(),
       phantom: PhantomData,
     }
   }
 }
-impl<'db, Item> Iterator for EmptyIterator<'db, Item> {
+impl<'a, Item> Iterator for EmptyIterator<'a, Item> {
   type Item = Item;
 
   fn next(&mut self) -> Option<Self::Item> {
     None
   }
 }
+
+impl<'a, Item> ConnectionIterator<'a> for EmptyIterator<'a, Item> {
+  fn current_nesting(&mut self) -> &Nesting {
+    todo!()
+  }
+
+  fn finish(self: Box<Self>) -> Nesting {
+    todo!()
+  }
+}
 // impl<'a, Item> BoxClone for EmptyIterator<'a, Item> {}
-// impl<'a> CloneIterator<ShareLevelLowerBound<'a>> for EmptyIterator<'a, ShareLevelLowerBound<'a>> {}
-pub fn trivial_inputs_giver<'db>() -> Inputs<'db> {
-  Box::new(EmptyIterator {
-    phantom: PhantomData,
-  })
-}
-pub fn trivial_inputs_iface_giver() -> InputsIface {
-  let iterator = EmptyIterator::<IIEltE> {
-    phantom: PhantomData,
-  };
-  Box::new(iterator)
-}
+// impl<'a> ConnectionIterator<ShareLevelLowerBound<'a>> for EmptyIterator<'a, ShareLevelLowerBound<'a>> {}
+// pub fn trivial_inputs_giver<'db>() -> Inputs<'db> {
+//   Box::new(EmptyIterator {
+//     phantom: PhantomData,
+//   })
+// }
+// pub fn trivial_inputs_iface_giver() -> InputsIface {
+//   let iterator = EmptyIterator::<IIEltE> {
+//     phantom: PhantomData,
+//   };
+//   Box::new(iterator)
+// }
 
 /// A runtime reactor instance.
 pub trait Rtor<'db> {
   /// Accepts the input of a downstream rtor. Returns true if the current rtor can now provide a
   /// different input. It must be safe to ignore the return value of this method.
-  fn accept(&mut self, side: Side, inputs: InputsGiver<'db>) -> bool;
+  fn accept(&mut self, side: Side, inputs: Inputs<'db>) -> bool;
   /// Provides the inputs of this rtor.
-  fn provide(&'db self, side: Side) -> InputsGiver<'db>;
+  fn provide(&'db self, side: Side, nesting: Nesting) -> Inputs<'db>;
   /// Steps this rtor forward by `distance` timesteps within the current nesting level.
   fn step_forward(&mut self, distance: u64) -> Option<Net>;
   /// Decrements the nesting level of this rtor's time.
@@ -64,7 +87,7 @@ pub trait Rtor<'db> {
 /// A potentially mutable compile-time model of a runtime `Rtor`.
 ///
 /// `RtorComptime` instances **should not** directly nor transitively instantiate `RtorComptime`s.
-pub trait RtorComptime {
+pub trait RtorComptime<'db> {
   /// Progresses the level of this and returns true if the value that would be produced by
   /// `self.levels` has changed. The correctness of this fixpointing feature is necessary for global
   /// correctness.
@@ -84,9 +107,9 @@ pub trait RtorComptime {
   fn levels(&self) -> HashSet<Level>;
   /// Accepts the input of a downstream rtor. This is used for communication between the rtoriface
   /// instances about what the levels of their corresponding reactors should be.
-  fn accept(&mut self, part: &[Inst], side: Side, inputs: &mut InputsIface);
+  fn accept(&mut self, part: &[Inst], side: Side, inputs: &mut InputsIface<'db>);
   /// Provides the inputs of this rtor.
-  fn provide(&self, part: &[Inst], side: Side) -> InputsIface;
+  fn provide(&self, part: &[Inst], side: Side, nesting: Nesting) -> InputsIface<'db>;
 }
 
 /// An RtorIface can be instantiated by any entity that needs to know how a corresponding Rtor would
@@ -143,15 +166,16 @@ pub trait RtorIface: DynClone + std::fmt::Debug {
   /// Returns the levels of the inputs of self.
   ///
   /// This function can be called by provide, but it should not call provide.
-  fn immut_provide(
+  fn immut_provide<'db>(
     &self,
-    db: &dyn Db,
+    db: &'db dyn Db,
     part: &[Inst],
     side: Side,
     starting_level: Level,
-  ) -> LevelIterator;
+    nesting: Nesting,
+  ) -> LevelIterator<'db>;
   /// Produces an instance of the RtorComptime associated with this.
-  fn comptime_realize<'db>(&self, db: &'db dyn Db) -> Box<dyn RtorComptime + 'db>;
+  fn comptime_realize<'db>(&self, db: &'db dyn Db) -> Box<dyn RtorComptime<'db> + 'db>;
   /// Constructs an implementation given compile time and instantiation time args.
   fn realize<'db>(
     &self,

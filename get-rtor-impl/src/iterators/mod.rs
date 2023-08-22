@@ -1,3 +1,3 @@
 pub mod chainclone;
-pub mod cloneiterator;
+pub mod connectioniterator;
 pub mod lazyclone;

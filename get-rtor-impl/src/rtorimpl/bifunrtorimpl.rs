@@ -7,10 +7,10 @@ use std::{
 };
 
 use irlf_db::ir::Inst;
-use lf_types::{Comm, FlowDirection, Level, Side, SideMatch};
+use lf_types::{Comm, Level, Side, SideMatch};
 
 use crate::{
-  iterators::cloneiterator::iterator_new,
+  iterators::connectioniterator::{iterator_new, Nesting},
   rtor::{InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface},
 };
 
@@ -77,25 +77,27 @@ impl RtorIface for BiFunRtorIface {
     }
   }
 
-  fn immut_provide(
+  fn immut_provide<'db>(
     &self,
-    _db: &dyn crate::Db,
+    _db: &'db dyn crate::Db,
     part: &[Inst],
     side: Side,
     starting_level: Level,
-  ) -> LevelIterator {
+    nesting: Nesting,
+  ) -> LevelIterator<'db> {
     require_empty(part);
-    match side {
-      Side::Left => iterator_new(vec![
+    let ret = match side {
+      Side::Left => vec![
         Comm::Data(starting_level),
         Comm::Data(starting_level),
         Comm::Notify,
-      ]),
-      Side::Right => iterator_new(vec![Comm::Data(starting_level + Level(1))]),
-    }
+      ],
+      Side::Right => vec![Comm::Data(starting_level + Level(1))],
+    };
+    iterator_new(nesting, Box::new(self.clone()), ret)
   }
 
-  fn comptime_realize<'db>(&self, db: &'db dyn crate::Db) -> Box<dyn RtorComptime + 'db> {
+  fn comptime_realize<'db>(&self, db: &'db dyn crate::Db) -> Box<dyn RtorComptime<'db> + 'db> {
     todo!()
   }
 

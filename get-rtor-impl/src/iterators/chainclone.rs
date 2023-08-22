@@ -1,49 +1,92 @@
-pub struct ChainClone<Item, CloneIterator: Iterator<Item = Item> + ?Sized>
-where
-  Box<CloneIterator>: Clone,
-{
-  backing_iters: Vec<Box<CloneIterator>>,
+use std::rc::Rc;
+
+use crate::rtor::{EmptyIterator, RtorIface};
+
+use super::connectioniterator::{ConnectionIterator, Nesting, FAKE};
+
+pub struct ChainClone<
+  'a,
+  Item,
+  IteratorGiver: Fn(Nesting) -> Box<dyn ConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
+> {
+  backing_iters: Vec<Rc<IteratorGiver>>,
+  current: Box<dyn ConnectionIterator<'a, Item = Item> + 'a>,
   pos: u32,
 }
 
-impl<Item, CloneIterator: Iterator<Item = Item> + ?Sized> ChainClone<Item, CloneIterator>
-where
-  Box<CloneIterator>: Clone,
+impl<
+    'a,
+    Item: 'static,
+    IteratorGiver: Fn(Nesting) -> Box<dyn ConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
+  > ChainClone<'a, Item, IteratorGiver>
 {
-  pub fn new(backing_iters: Vec<Box<CloneIterator>>) -> Self {
+  pub fn new(
+    mut nesting: Nesting,
+    iface: Box<dyn RtorIface>,
+    backing_iters: Vec<Rc<IteratorGiver>>,
+  ) -> Self {
+    nesting.start_producer(iface);
     ChainClone {
       backing_iters,
+      current: EmptyIterator::new(nesting),
       pos: 0,
     }
   }
 }
 
-impl<Item, CloneIterator: Iterator<Item = Item> + ?Sized> Iterator
-  for ChainClone<Item, CloneIterator>
-where
-  Box<CloneIterator>: Clone,
+impl<
+    'a,
+    Item,
+    IteratorGiver: Fn(Nesting) -> Box<dyn ConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
+  > Iterator for ChainClone<'a, Item, IteratorGiver>
 {
   type Item = Item;
 
   fn next(&mut self) -> Option<Self::Item> {
-    let current = self.backing_iters.get_mut(self.pos as usize)?;
-    if let Some(x) = current.next() {
+    // let current = self
+    //   .current
+    //   .get_or_insert_with(|| (*self.backing_iters.get_mut(self.pos as usize)?)());
+    if let Some(x) = self.current.next() {
       Some(x)
-    } else {
+    } else if let Some(next_giver) = self.backing_iters.get((self.pos + 1) as usize) {
+      let moved = std::mem::replace(&mut self.current, next_giver(FAKE));
+      self.current = next_giver(moved.finish());
+      // let next = next_giver(self.current.finish());
+      // self.current = next;
       self.pos += 1;
       self.next()
+    } else {
+      None
     }
   }
 }
 
-impl<Item, CloneIterator: Iterator<Item = Item> + ?Sized> Clone for ChainClone<Item, CloneIterator>
-where
-  Box<CloneIterator>: Clone,
+impl<
+    'a,
+    Item,
+    IteratorGiver: Fn(Nesting) -> Box<dyn ConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
+  > Clone for ChainClone<'a, Item, IteratorGiver>
 {
   fn clone(&self) -> Self {
-    Self {
+    ChainClone {
       backing_iters: self.backing_iters.clone(),
+      current: self.current.clone(),
       pos: self.pos,
     }
+  }
+}
+
+impl<
+    'a,
+    Item,
+    BackingIterator: Fn(Nesting) -> Box<dyn ConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
+  > ConnectionIterator<'a> for ChainClone<'a, Item, BackingIterator>
+{
+  fn current_nesting(&mut self) -> &super::connectioniterator::Nesting {
+    todo!()
+  }
+
+  fn finish(self: Box<Self>) -> super::connectioniterator::Nesting {
+    todo!()
   }
 }
