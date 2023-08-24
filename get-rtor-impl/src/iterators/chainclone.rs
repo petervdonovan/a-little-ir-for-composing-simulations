@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::rtor::{EmptyIterator, RtorIface};
 
-use super::connectioniterator::{ConnectionIterator, Nesting, FAKE};
+use super::connectioniterator::{ConnectionIterator, Nesting, PLACEHOLDER};
 
 pub struct ChainClone<
   'a,
@@ -49,7 +49,7 @@ impl<
     if let Some(x) = self.current.next() {
       Some(x)
     } else if let Some(next_giver) = self.backing_iters.get((self.pos + 1) as usize) {
-      let moved = std::mem::replace(&mut self.current, next_giver(FAKE));
+      let moved = std::mem::replace(&mut self.current, next_giver(PLACEHOLDER));
       self.current = next_giver(moved.finish());
       // let next = next_giver(self.current.finish());
       // self.current = next;
