@@ -18,12 +18,17 @@ pub type InputsIface<'a> = Box<dyn ConnectionIterator<'a, Item = IIEltE> + 'a>;
 
 pub type LevelIterator<'a> = Box<dyn ConnectionIterator<'a, Item = Comm<Level>> + 'a>;
 
+pub type FuzzySideIterator<'a> =
+  Box<dyn Iterator<Item = (Level, SideMatch, Comm<Box<dyn RtorIface + 'a>>)> + 'a>;
+pub type ExactSideIterator<'a> =
+  Box<dyn Iterator<Item = (Level, Comm<Box<dyn RtorIface + 'a>>)> + 'a>;
+
 pub struct EmptyIterator<'a, Item> {
   nesting: Nesting,
   phantom: PhantomData<&'a Item>,
 }
 impl<'a, Item: 'static> EmptyIterator<'a, Item> {
-  pub fn new(nesting: Nesting) -> Box<dyn ConnectionIterator<'a, Item = Item> + 'a> {
+  pub fn new_dyn(nesting: Nesting) -> Box<dyn ConnectionIterator<'a, Item = Item> + 'a> {
     Box::new(EmptyIterator {
       nesting,
       phantom: PhantomData,
@@ -183,23 +188,13 @@ pub trait RtorIface: DynClone + std::fmt::Debug {
     _inst_time_args: Vec<&'db dyn std::any::Any>,
   ) -> Box<dyn Rtor<'db> + 'db>;
   /// Returns the rtorifaces exposed on the given side by the given part of this.
-  fn side<'db>(
-    &self,
-    db: &'db dyn Db,
-    side: SideMatch,
-    part: &[Inst],
-  ) -> Box<dyn Iterator<Item = (Level, SideMatch, Comm<Box<dyn RtorIface + 'db>>)> + 'db>;
+  fn side<'db>(&self, db: &'db dyn Db, side: SideMatch, part: &[Inst]) -> FuzzySideIterator<'db>;
   /// Returns the rtorifaces exposed on the given side by the given part of this.
-  fn side_exact<'db>(
-    &self,
-    db: &'db dyn Db,
-    side: Side,
-    part: &[Inst],
-  ) -> Box<dyn Iterator<Item = (Level, Comm<Box<dyn RtorIface + 'db>>)> + 'db> {
+  fn side_exact<'db>(&self, db: &'db dyn Db, side: Side, part: &[Inst]) -> ExactSideIterator<'db> {
     Box::new(
       self
         .side(db, SideMatch::One(side), part)
-        .map(|(a, b, c)| (a, c)),
+        .map(|(a, _, c)| (a, c)),
     )
   }
   fn iface_id(&self) -> u128;

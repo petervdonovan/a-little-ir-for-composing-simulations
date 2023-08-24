@@ -28,7 +28,7 @@ impl<
     nesting.start_producer(iface);
     ChainClone {
       backing_iters,
-      current: EmptyIterator::new(nesting),
+      current: EmptyIterator::new_dyn(nesting),
       pos: 0,
     }
   }

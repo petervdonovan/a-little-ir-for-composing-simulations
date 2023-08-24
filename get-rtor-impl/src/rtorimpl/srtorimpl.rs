@@ -7,7 +7,7 @@ use std::{
 
 use crate::{
   iterators::connectioniterator::{ConnectionIterator, Nesting},
-  rtor::{IIEltE, Inputs},
+  rtor::{FuzzySideIterator, IIEltE, Inputs},
   Db,
 };
 use irlf_db::ir::{Inst, InstRef, StructlikeCtor};
@@ -250,7 +250,7 @@ impl<'a> RtorComptime<'a> for SrtorComptime<'a> {
                 let ret: Rc<dyn Fn(Comm<Level>) -> FixpointingStatus> = Rc::new(
                   closure!(clone levels_map, |intrinsic_lower_bound: Comm<Level>| {
                     (*f)(intrinsic_lower_bound.map(
-                      |intrinsic_lower_bound| (*levels_map.borrow())[&intrinsic_lower_bound]
+                      |intrinsic_lower_bound| (*levels_map.borrow())[intrinsic_lower_bound]
                     ))
                   }));
                 ret
@@ -372,9 +372,7 @@ impl RtorIface for SrtorIface {
     starting_level: Level,
     nesting: Nesting,
   ) -> LevelIterator<'db> {
-    let mut sub_iterators: Vec<
-      Rc<dyn Fn(Nesting) -> Box<dyn ConnectionIterator<'db, Item = _> + 'db> + 'db>,
-    > = vec![];
+    let mut sub_iterators: Vec<Rc<dyn Fn(Nesting) -> LevelIterator<'db> + 'db>> = vec![];
     let rc_part = Rc::new(part.to_vec());
     for (starting_intrinsic_level, iface) in self.side_exact(db, side, part) {
       match iface {
@@ -448,19 +446,25 @@ impl RtorIface for SrtorIface {
     part: &[Inst],
   ) -> Box<dyn Iterator<Item = (Level, SideMatch, Comm<Box<dyn RtorIface + 'db>>)> + 'db> {
     let part = part.to_vec();
-    let ifaces = StartingIntrinsicLevelProvider::new(iface(self.sctor(db), db, side)
-      .map(|child| {
+    let ifaces = StartingIntrinsicLevelProvider::new(
+      iface(self.sctor(db), db, side).map(|child| {
         child.map(|child| {
-        let [child, tail @ ..] = &child.iref(db)[..] else { unreachable!("refs should never be empty if the ast passed parsing/validation") };
-        let child = iface_of(db, child.ctor(db));
-        (child, tail.to_vec()) })
-      }), db, side)
-      .filter_map(closure!(clone side, clone part, |(level, child, tail)| {
-        let longer = sequence_max(&tail, rest_or_empty(&part))?;
-        let ret: Box<dyn Iterator<Item = (Level, SideMatch, Comm<Box<dyn RtorIface + 'db>>)>> = child.side(db, side, longer);
-        Some(ret.map(move |(level_unadjusted, sm, iface)| (level_unadjusted + level, sm, iface)))
-      }))
-      .flatten();
+          let [child, tail @ ..] = &child.iref(db)[..] else {
+            unreachable!("refs should never be empty if the ast passed parsing/validation")
+          };
+          let child = iface_of(db, child.ctor(db));
+          (child, tail.to_vec())
+        })
+      }),
+      db,
+      side,
+    )
+    .filter_map(closure!(clone side, clone part, |(level, child, tail)| {
+      let longer = sequence_max(&tail, rest_or_empty(&part))?;
+      let ret: FuzzySideIterator<'db> = child.side(db, side, longer);
+      Some(ret.map(move |(level_unadjusted, sm, iface)| (level_unadjusted + level, sm, iface)))
+    }))
+    .flatten();
     Box::new(ifaces)
   }
 
@@ -483,6 +487,7 @@ impl RtorIface for SrtorIface {
 }
 
 #[salsa::tracked]
+#[allow(clippy::borrowed_box)]
 pub fn srtor_of(db: &dyn crate::Db, sctor: StructlikeCtor) -> Box<dyn RtorIface> {
   Box::new(SrtorIface::new(db, sctor))
 }

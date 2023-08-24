@@ -1,4 +1,4 @@
-use crate::iterators::connectioniterator::{iterator_new, map, Nesting};
+use crate::iterators::connectioniterator::{iterator_new, Nesting};
 use crate::rtor::{
   EmptyIterator, Inputs, InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface, SetPort,
 };
@@ -11,7 +11,7 @@ use std::cmp;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
-use std::{any::Any, cell::RefCell, marker::PhantomData, rc::Rc};
+use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 use super::util::require_empty;
 use super::FixpointingStatus;
@@ -105,7 +105,7 @@ impl<'a> RtorComptime<'a> for FunRtorComptime<'a> {
     require_empty(part);
     // trivial_inputs_iface_giver()
     if let Side::Right = side {
-      EmptyIterator::new(nesting)
+      EmptyIterator::new_dyn(nesting)
     } else {
       // let self_level = Rc::clone(&self.level);
       // map(
@@ -176,7 +176,7 @@ impl RtorIface for FunRtorIface {
     )
   }
 
-  fn n_levels(&self, _db: &dyn Db, side: SideMatch) -> Level {
+  fn n_levels(&self, _db: &dyn Db, _side: SideMatch) -> Level {
     Level(0)
   }
 
