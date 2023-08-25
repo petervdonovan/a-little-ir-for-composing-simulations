@@ -7,7 +7,7 @@ use std::{
 
 use crate::{
   iterators::connectioniterator::{ConnectionIterator, Nesting},
-  rtor::{FuzzySideIterator, IIEltE, Inputs},
+  rtor::{ComptimeInput, DeferredNotifys, FuzzySideIterator, Inputs},
   Db,
 };
 use irlf_db::ir::{Inst, InstRef, StructlikeCtor};
@@ -233,13 +233,14 @@ impl<'a> RtorComptime<'a> for SrtorComptime<'a> {
     // bother with this function and instead just do the accept (connection) many times.
     let levels_map: Rc<RefCell<BTreeMap<Level, Level>>> = self.levels_internal2external.clone();
     let mut changed = FixpointingStatus::Unchanged;
+    let mut deferred = DeferredNotifys::new();
     for (part, side, inputs) in self.external_connections.iter() {
       changed |= self.iface.immut_accept(
         self.db,
         part,
         *side,
         &mut map(
-          inputs.clone(),
+          &mut inputs.clone(),
           Rc::new(
             closure!(clone levels_map, |f: Comm<Rc<dyn Fn(Comm<Level>) -> FixpointingStatus>>| {
               f.map(|f: &Rc<dyn Fn(Comm<Level>) -> FixpointingStatus>| {
@@ -258,6 +259,7 @@ impl<'a> RtorComptime<'a> for SrtorComptime<'a> {
             }),
           ),
         ),
+        &mut deferred,
       );
     }
     changed
@@ -289,10 +291,10 @@ impl<'a> RtorComptime<'a> for SrtorComptime<'a> {
         }
         _ => FixpointingStatus::Unchanged,
       };
-      IIEltE::Data(Rc::new(f)) as IIEltE
+      ComptimeInput::Data(Rc::new(f)) as ComptimeInput
     });
     map(
-      self
+      &mut self
         .iface
         .immut_provide(self.db, part, side, Level(0), nesting),
       f,
@@ -328,6 +330,7 @@ impl RtorIface for SrtorIface {
     part: &[Inst],
     side: Side,
     inputs_iface: &mut InputsIface,
+    deferred_notifys: &mut DeferredNotifys,
   ) -> FixpointingStatus {
     let mut changed = FixpointingStatus::Unchanged;
     for (starting_intrinsic_level, iface) in self.side_exact(db, side, part) {
@@ -343,7 +346,7 @@ impl RtorIface for SrtorIface {
           //   }),
           // ),
           &mut map(
-            inputs_iface.clone(),
+            inputs_iface, // FIXME: super wrong. will not work
             Rc::new(move |it| {
               it.map(|it| {
                 // another case where the variable had to be factored out in order for it to type-check. Why?
@@ -358,7 +361,11 @@ impl RtorIface for SrtorIface {
               })
             }),
           ),
+          deferred_notifys,
         );
+
+        // TODO: consume all level increments which are now at the head of the sequence and use them
+        // to consume all the deferred notifys
       }
     }
     changed

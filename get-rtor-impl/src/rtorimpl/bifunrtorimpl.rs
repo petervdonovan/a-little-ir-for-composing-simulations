@@ -11,7 +11,7 @@ use lf_types::{Comm, Level, Side, SideMatch};
 
 use crate::{
   iterators::connectioniterator::{iterator_new, Nesting},
-  rtor::{InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface},
+  rtor::{DeferredNotifys, InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface},
 };
 
 use super::{util::require_empty, FixpointingStatus};
@@ -67,6 +67,7 @@ impl RtorIface for BiFunRtorIface {
     part: &[Inst],
     side: Side,
     inputs_iface: &mut InputsIface,
+    deferred_notifys: &mut DeferredNotifys,
   ) -> FixpointingStatus {
     require_empty(part);
     if side == Side::Right {

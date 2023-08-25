@@ -69,7 +69,7 @@ impl Nesting {
 pub trait ConnectionIterator<'a>: Iterator + DynClone {
   // Returns the nesting corresponding to the latest output of self, or the initial nesting
   // otherwise.
-  fn current_nesting(&mut self) -> &Nesting;
+  fn current_nesting(&self) -> &Nesting;
   // Marks the termination of the iteration over `self` and returns the resulting Nesting.
   fn finish(self: Box<Self>) -> Nesting;
 }
@@ -82,60 +82,95 @@ impl<'a, Item> Clone for Box<dyn ConnectionIterator<'a, Item = Item> + 'a> {
 }
 
 // impl<T, Item> ConnectionIterator<Item> for T where T: Iterator<Item = Item> + DynClone {}
-
-pub struct Map<T, ItemIn, ItemOut>
+enum BackingIterator<'a, T: ?Sized> {
+  Owned(Box<T>),
+  Borrowed(&'a mut Box<T>),
+}
+pub struct Map<'a, T, ItemIn, ItemOut>
 where
   T: Iterator<Item = ItemIn> + DynClone + ?Sized,
 {
-  backing_iterator: Box<T>,
+  backing_iterator: BackingIterator<'a, T>,
   f: Rc<dyn Fn(ItemIn) -> ItemOut>,
 }
 
-impl<'a, T, ItemIn: 'static, ItemOut: 'static> ConnectionIterator<'a> for Map<T, ItemIn, ItemOut>
+impl<'a, T, ItemIn, ItemOut> Map<'a, T, ItemIn, ItemOut>
 where
-  T: ConnectionIterator<'a, Item = ItemIn> + ?Sized,
+  T: Iterator<Item = ItemIn> + DynClone + ?Sized,
 {
-  fn current_nesting(&mut self) -> &Nesting {
-    self.backing_iterator.current_nesting()
+  fn backing_iterator_mut<Out>(&mut self, op: impl Fn(&mut Box<T>) -> Out) -> Out {
+    match &mut self.backing_iterator {
+      BackingIterator::Owned(ref mut mine) => op(mine),
+      BackingIterator::Borrowed(theirs) => op(*theirs),
+    }
   }
-
-  fn finish(self: Box<Self>) -> Nesting {
-    self.backing_iterator.finish()
+  fn backing_iterator<'b, Out>(&'b self, op: impl Fn(&'b Box<T>) -> Out) -> Out {
+    match &self.backing_iterator {
+      BackingIterator::Owned(mine) => op(mine),
+      BackingIterator::Borrowed(theirs) => op(*theirs),
+    }
+  }
+  fn backing_iterator_move<'b, Out>(self, op: impl Fn(Box<T>) -> Out) -> Out {
+    match self.backing_iterator {
+      BackingIterator::Owned(mine) => op(mine),
+      BackingIterator::Borrowed(theirs) => op(*theirs),
+    }
   }
 }
 
-impl<T, ItemIn, ItemOut> Iterator for Map<T, ItemIn, ItemOut>
+impl<'a, T, ItemIn: 'static, ItemOut: 'static> ConnectionIterator<'a>
+  for Map<'a, T, ItemIn, ItemOut>
+where
+  T: ConnectionIterator<'a, Item = ItemIn> + ?Sized,
+{
+  fn current_nesting<'b>(&'b self) -> &'b Nesting {
+    self.backing_iterator(|it: &'b Box<T>| it.current_nesting())
+  }
+
+  fn finish(mut self: Box<Self>) -> Nesting {
+    self.backing_iterator_mut(|it| it.finish())
+  }
+}
+
+impl<'a, T, ItemIn, ItemOut> Iterator for Map<'a, T, ItemIn, ItemOut>
 where
   T: Iterator<Item = ItemIn> + DynClone + ?Sized,
 {
   type Item = ItemOut;
 
   fn next(&mut self) -> Option<Self::Item> {
-    Some((*self.f)(self.backing_iterator.next()?))
+    let next = self.backing_iterator_mut(|it| it.next())?;
+    Some((*self.f)(next))
   }
 }
 
-impl<T, ItemIn: 'static, ItemOut: 'static> Clone for Map<T, ItemIn, ItemOut>
+impl<'a, T, ItemIn: 'static, ItemOut: 'static> Clone for Map<'a, T, ItemIn, ItemOut>
 where
   T: Iterator<Item = ItemIn> + DynClone + ?Sized,
 {
   fn clone(&self) -> Self {
     Self {
-      backing_iterator: dyn_clone::clone_box(&*self.backing_iterator),
+      backing_iterator: BackingIterator::Owned(
+        self.backing_iterator(|it| dyn_clone::clone_box(&**it)),
+      ),
+      // backing_iterator: BackingIterator::Owned(dyn_clone::clone_box(&*self.backing_iterator())),
       f: Rc::clone(&self.f),
     }
   }
 }
 
 pub fn map<'a, T, ItemIn: 'static, ItemOut: 'static>(
-  it: Box<T>,
+  it: &'a mut Box<T>,
   f: Rc<dyn Fn(ItemIn) -> ItemOut>,
 ) -> Box<dyn ConnectionIterator<'a, Item = ItemOut> + 'a>
 where
   T: ConnectionIterator<'a, Item = ItemIn> + 'a + ?Sized,
 {
+  // TODO: the problem is that the Map either owns the backing iterator (if it is a clone) or
+  // doesn't (in some cases, if it is not a clone). The obvious way to handle these two cases is to
+  // use an enum.
   Box::new(Map {
-    backing_iterator: it,
+    backing_iterator: BackingIterator::Borrowed(it),
     f: Rc::clone(&f),
   })
 }
@@ -158,7 +193,7 @@ impl<Item: Clone> Iterator for VecIterator<Item> {
 }
 
 impl<'a, Item: Clone> ConnectionIterator<'a> for VecIterator<Item> {
-  fn current_nesting(&mut self) -> &Nesting {
+  fn current_nesting(&self) -> &Nesting {
     &self.nesting
   }
   fn finish(mut self: Box<Self>) -> Nesting {

@@ -82,7 +82,7 @@ impl<
     BackingIterator: Fn(Nesting) -> Box<dyn ConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
   > ConnectionIterator<'a> for ChainClone<'a, Item, BackingIterator>
 {
-  fn current_nesting(&mut self) -> &super::connectioniterator::Nesting {
+  fn current_nesting(&self) -> &super::connectioniterator::Nesting {
     todo!()
   }
 

@@ -4,17 +4,15 @@ use lf_types::{Comm, FlowDirection, Level, Net, Side, SideMatch};
 use std::{any::Any, collections::HashSet, marker::PhantomData, rc::Rc};
 
 use crate::{
-  iterators::connectioniterator::{ConnectionIterator, Nesting},
+  iterators::connectioniterator::{ConnectionIterator, Nesting, NestingStack},
   rtorimpl::FixpointingStatus,
   Db,
 };
 pub type SetPort<'db> = Box<dyn Fn(&dyn Any) + 'db>;
 pub type Inputs<'a> = Box<dyn ConnectionIterator<'a, Item = SetPort<'a>> + 'a>;
 
-pub type IIEltE = Comm<Rc<dyn Fn(Comm<Level>) -> FixpointingStatus>>;
-// dyn_clone::clone_trait_object!(ConnectionIterator<Item = IIEltE>);
-// dyn_clone::clone_trait_object!(ConnectionIterator<Item = Comm<Level>>);
-pub type InputsIface<'a> = Box<dyn ConnectionIterator<'a, Item = IIEltE> + 'a>;
+pub type ComptimeInput = Comm<Rc<dyn Fn(Comm<Level>) -> FixpointingStatus>>;
+pub type InputsIface<'a> = Box<dyn ConnectionIterator<'a, Item = ComptimeInput> + 'a>;
 
 pub type LevelIterator<'a> = Box<dyn ConnectionIterator<'a, Item = Comm<Level>> + 'a>;
 
@@ -22,6 +20,8 @@ pub type FuzzySideIterator<'a> =
   Box<dyn Iterator<Item = (Level, SideMatch, Comm<Box<dyn RtorIface + 'a>>)> + 'a>;
 pub type ExactSideIterator<'a> =
   Box<dyn Iterator<Item = (Level, Comm<Box<dyn RtorIface + 'a>>)> + 'a>;
+
+pub type DeferredNotifys = HashSet<NestingStack>;
 
 pub struct EmptyIterator<'a, Item> {
   nesting: Nesting,
@@ -52,7 +52,7 @@ impl<'a, Item> Iterator for EmptyIterator<'a, Item> {
 }
 
 impl<'a, Item> ConnectionIterator<'a> for EmptyIterator<'a, Item> {
-  fn current_nesting(&mut self) -> &Nesting {
+  fn current_nesting(&self) -> &Nesting {
     todo!()
   }
 
@@ -167,6 +167,7 @@ pub trait RtorIface: DynClone + std::fmt::Debug {
     part: &[Inst],
     side: Side,
     inputs_iface: &mut InputsIface,
+    deferred_notifys: &mut DeferredNotifys,
   ) -> FixpointingStatus;
   /// Returns the levels of the inputs of self.
   ///

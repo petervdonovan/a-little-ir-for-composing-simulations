@@ -1,6 +1,7 @@
 use crate::iterators::connectioniterator::{iterator_new, Nesting};
 use crate::rtor::{
-  EmptyIterator, Inputs, InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface, SetPort,
+  DeferredNotifys, EmptyIterator, Inputs, InputsIface, LevelIterator, Rtor, RtorComptime,
+  RtorIface, SetPort,
 };
 use crate::Db;
 use irlf_db::ir::Inst;
@@ -150,6 +151,7 @@ impl RtorIface for FunRtorIface {
     part: &[Inst],
     side: Side,
     inputs_iface: &mut InputsIface,
+    deferred_notifys: &mut DeferredNotifys,
   ) -> FixpointingStatus {
     require_empty(part);
     if side == Side::Right {
