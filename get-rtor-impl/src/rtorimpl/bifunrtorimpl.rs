@@ -10,7 +10,7 @@ use irlf_db::ir::Inst;
 use lf_types::{Comm, Level, Side, SideMatch};
 
 use crate::{
-  iterators::connectioniterator::{iterator_new, Nesting},
+  iterators::{connectioniterator::iterator_new, nesting::Nesting},
   rtor::{DeferredNotifys, InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface},
 };
 

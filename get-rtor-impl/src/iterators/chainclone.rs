@@ -2,22 +2,25 @@ use std::rc::Rc;
 
 use crate::rtor::{EmptyIterator, RtorIface};
 
-use super::connectioniterator::{ConnectionIterator, Nesting, PLACEHOLDER};
+use super::{
+  connectioniterator::{ConnectionIterator, ProvidingConnectionIterator},
+  nesting::{Nesting, PLACEHOLDER},
+};
 
 pub struct ChainClone<
   'a,
   Item,
-  IteratorGiver: Fn(Nesting) -> Box<dyn ConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
+  IteratorGiver: Fn(Nesting) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
 > {
   backing_iters: Vec<Rc<IteratorGiver>>,
-  current: Box<dyn ConnectionIterator<'a, Item = Item> + 'a>,
+  current: Box<dyn ProvidingConnectionIterator<'a, Item = Item> + 'a>,
   pos: u32,
 }
 
 impl<
     'a,
     Item: 'static,
-    IteratorGiver: Fn(Nesting) -> Box<dyn ConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
+    IteratorGiver: Fn(Nesting) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
   > ChainClone<'a, Item, IteratorGiver>
 {
   pub fn new(
@@ -37,7 +40,7 @@ impl<
 impl<
     'a,
     Item,
-    IteratorGiver: Fn(Nesting) -> Box<dyn ConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
+    IteratorGiver: Fn(Nesting) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
   > Iterator for ChainClone<'a, Item, IteratorGiver>
 {
   type Item = Item;
@@ -64,7 +67,7 @@ impl<
 impl<
     'a,
     Item,
-    IteratorGiver: Fn(Nesting) -> Box<dyn ConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
+    IteratorGiver: Fn(Nesting) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
   > Clone for ChainClone<'a, Item, IteratorGiver>
 {
   fn clone(&self) -> Self {
@@ -79,14 +82,21 @@ impl<
 impl<
     'a,
     Item,
-    BackingIterator: Fn(Nesting) -> Box<dyn ConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
+    BackingIterator: Fn(Nesting) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
   > ConnectionIterator<'a> for ChainClone<'a, Item, BackingIterator>
 {
-  fn current_nesting(&self) -> &super::connectioniterator::Nesting {
+  fn current_nesting(&self) -> &Nesting {
     todo!()
   }
+}
 
-  fn finish(self: Box<Self>) -> super::connectioniterator::Nesting {
+impl<
+    'a,
+    Item,
+    BackingIterator: Fn(Nesting) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
+  > ProvidingConnectionIterator<'a> for ChainClone<'a, Item, BackingIterator>
+{
+  fn finish(self: Box<Self>) -> Nesting {
     todo!()
   }
 }

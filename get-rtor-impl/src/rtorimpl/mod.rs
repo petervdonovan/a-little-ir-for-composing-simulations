@@ -53,7 +53,7 @@ mod tests {
   use irlf_db::from_text;
   use lf_types::{Level, Side};
 
-  use crate::{iterators::connectioniterator::Nesting, GriTestDatabase};
+  use crate::{iterators::nesting::Nesting, GriTestDatabase};
 
   use super::*;
 

@@ -6,17 +6,18 @@ use std::{
 };
 
 use crate::{
-  iterators::connectioniterator::{ConnectionIterator, Nesting},
-  rtor::{ComptimeInput, DeferredNotifys, FuzzySideIterator, Inputs},
+  iterators::{
+    connectioniterator::ConnectionIterator,
+    map::{map, pmap},
+    nesting::Nesting,
+  },
+  rtor::{ComptimeInput, DeferredNotifys, FuzzySideIterator, Inputs, ProvidingInputsIface},
   Db,
 };
 use irlf_db::ir::{Inst, InstRef, StructlikeCtor};
 use lf_types::{Comm, FlowDirection, Level, Side, SideMatch};
 
-use crate::{
-  iterators::connectioniterator::map,
-  rtor::{InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface},
-};
+use crate::rtor::{InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface};
 
 use closure::closure;
 
@@ -120,7 +121,7 @@ fn connect<'db>(
 ) {
   let mut connect =
     |ref_accept: Vec<Inst>, ref_provide: Vec<Inst>, side_accept: Side, side_provide: Side| {
-      let mut provide1 =
+      let mut provide1: InputsIface =
         children[&ref_provide[0]].provide(&ref_provide[1..], side_accept, Nesting::default());
       children.get_mut(&ref_accept[0]).unwrap().accept(
         &ref_accept[1..],
@@ -235,12 +236,13 @@ impl<'a> RtorComptime<'a> for SrtorComptime<'a> {
     let mut changed = FixpointingStatus::Unchanged;
     let mut deferred = DeferredNotifys::new();
     for (part, side, inputs) in self.external_connections.iter() {
+      let mut cloned_inputs = inputs.clone();
       changed |= self.iface.immut_accept(
         self.db,
         part,
         *side,
         &mut map(
-          &mut inputs.clone(),
+          &mut cloned_inputs,
           Rc::new(
             closure!(clone levels_map, |f: Comm<Rc<dyn Fn(Comm<Level>) -> FixpointingStatus>>| {
               f.map(|f: &Rc<dyn Fn(Comm<Level>) -> FixpointingStatus>| {
@@ -280,7 +282,12 @@ impl<'a> RtorComptime<'a> for SrtorComptime<'a> {
       .push((part.to_vec(), side, inputs.clone()));
   }
 
-  fn provide(&self, part: &[Inst], side: lf_types::Side, nesting: Nesting) -> InputsIface<'a> {
+  fn provide(
+    &self,
+    part: &[Inst],
+    side: lf_types::Side,
+    nesting: Nesting,
+  ) -> ProvidingInputsIface<'a> {
     let mymap = Rc::clone(&self.levels_internal2external);
     let f = Rc::new(move |intrinsic_level: Comm<Level>| {
       let intrinsic_level = intrinsic_level.clone();
@@ -293,8 +300,8 @@ impl<'a> RtorComptime<'a> for SrtorComptime<'a> {
       };
       ComptimeInput::Data(Rc::new(f)) as ComptimeInput
     });
-    map(
-      &mut self
+    pmap(
+      self
         .iface
         .immut_provide(self.db, part, side, Level(0), nesting),
       f,

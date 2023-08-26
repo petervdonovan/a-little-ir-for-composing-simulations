@@ -4,7 +4,10 @@ use lf_types::{Comm, FlowDirection, Level, Net, Side, SideMatch};
 use std::{any::Any, collections::HashSet, marker::PhantomData, rc::Rc};
 
 use crate::{
-  iterators::connectioniterator::{ConnectionIterator, Nesting, NestingStack},
+  iterators::{
+    connectioniterator::{ConnectionIterator, ProvidingConnectionIterator},
+    nesting::{Nesting, NestingStack},
+  },
   rtorimpl::FixpointingStatus,
   Db,
 };
@@ -13,8 +16,10 @@ pub type Inputs<'a> = Box<dyn ConnectionIterator<'a, Item = SetPort<'a>> + 'a>;
 
 pub type ComptimeInput = Comm<Rc<dyn Fn(Comm<Level>) -> FixpointingStatus>>;
 pub type InputsIface<'a> = Box<dyn ConnectionIterator<'a, Item = ComptimeInput> + 'a>;
+pub type ProvidingInputsIface<'a> =
+  Box<dyn ProvidingConnectionIterator<'a, Item = ComptimeInput> + 'a>;
 
-pub type LevelIterator<'a> = Box<dyn ConnectionIterator<'a, Item = Comm<Level>> + 'a>;
+pub type LevelIterator<'a> = Box<dyn ProvidingConnectionIterator<'a, Item = Comm<Level>> + 'a>;
 
 pub type FuzzySideIterator<'a> =
   Box<dyn Iterator<Item = (Level, SideMatch, Comm<Box<dyn RtorIface + 'a>>)> + 'a>;
@@ -28,7 +33,7 @@ pub struct EmptyIterator<'a, Item> {
   phantom: PhantomData<&'a Item>,
 }
 impl<'a, Item: 'static> EmptyIterator<'a, Item> {
-  pub fn new_dyn(nesting: Nesting) -> Box<dyn ConnectionIterator<'a, Item = Item> + 'a> {
+  pub fn new_dyn(nesting: Nesting) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item> + 'a> {
     Box::new(EmptyIterator {
       nesting,
       phantom: PhantomData,
@@ -55,7 +60,9 @@ impl<'a, Item> ConnectionIterator<'a> for EmptyIterator<'a, Item> {
   fn current_nesting(&self) -> &Nesting {
     todo!()
   }
+}
 
+impl<'a, Item> ProvidingConnectionIterator<'a> for EmptyIterator<'a, Item> {
   fn finish(self: Box<Self>) -> Nesting {
     todo!()
   }
@@ -114,7 +121,7 @@ pub trait RtorComptime<'db> {
   /// instances about what the levels of their corresponding reactors should be.
   fn accept(&mut self, part: &[Inst], side: Side, inputs: &mut InputsIface<'db>);
   /// Provides the inputs of this rtor.
-  fn provide(&self, part: &[Inst], side: Side, nesting: Nesting) -> InputsIface<'db>;
+  fn provide(&self, part: &[Inst], side: Side, nesting: Nesting) -> ProvidingInputsIface<'db>;
 }
 
 /// An RtorIface can be instantiated by any entity that needs to know how a corresponding Rtor would
