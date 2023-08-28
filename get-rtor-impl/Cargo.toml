@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 closure = "0.3.0"
+connectioniterator = { version = "0.1.0", path = "../connectioniterator" }
 dyn-clone = "1.0.12"
 expect-test = "1.4.1"
 irlf-db = { version = "0.1.0", path = "../irlf-db" }

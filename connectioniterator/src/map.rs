@@ -2,10 +2,9 @@ use std::{marker::PhantomData, rc::Rc};
 
 use dyn_clone::DynClone;
 
-use super::{
-  connectioniterator::{ConnectionIterator, ProvidingConnectionIterator},
-  nesting::{NBound, Nesting},
-};
+use crate::{ConnectionIterator, ProvidingConnectionIterator};
+
+use super::nesting::{NBound, Nesting};
 
 enum BackingIterator<'a, T: ?Sized> {
   Borrowed(&'a mut Box<T>),

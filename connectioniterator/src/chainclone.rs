@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
-use crate::rtor::{EmptyIterator, RtorIface};
+use crate::{ConnectionIterator, ProvidingConnectionIterator};
 
 use super::{
-  connectioniterator::{ConnectionIterator, ProvidingConnectionIterator},
+  emptyiterator::EmptyIterator,
   nesting::{NBound, Nesting},
 };
 

@@ -1,8 +1,15 @@
+#![feature(trait_alias)]
+
+pub mod chainclone;
+// pub mod connectioniterator;
+pub mod emptyiterator;
+pub mod lazyclone;
+pub mod map;
+pub mod nesting;
+
 use dyn_clone::DynClone;
 
-use crate::rtor::RtorIface;
-
-use super::nesting::{NBound, Nesting};
+use crate::nesting::{NBound, Nesting};
 
 pub trait ProvidingConnectionIterator<'a>: ConnectionIterator<'a> {
   // Marks the termination of the iteration over `self` and returns the resulting Nesting.
@@ -29,8 +36,6 @@ impl<'a, Item, N: NBound> Clone
     dyn_clone::clone_box(&**self)
   }
 }
-
-// impl<T, Item> ConnectionIterator<Item> for T where T: Iterator<Item = Item> + DynClone {}
 
 #[derive(Clone)]
 struct VecIterator<Item, N: NBound> {

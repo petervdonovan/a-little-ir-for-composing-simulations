@@ -49,11 +49,12 @@ pub fn lctor_of(db: &dyn crate::Db, lctor: LibCtor) -> Box<dyn RtorIface> {
 mod tests {
   use std::collections::HashSet;
 
+  use connectioniterator::nesting::Nesting;
   use expect_test::{expect, Expect};
   use irlf_db::from_text;
   use lf_types::{Level, Side};
 
-  use crate::{iterators::nesting::Nesting, GriTestDatabase};
+  use crate::GriTestDatabase;
 
   use super::*;
 

@@ -6,12 +6,12 @@ use std::{
   rc::Rc,
 };
 
+use connectioniterator::{iterator_new, nesting::Nesting};
 use irlf_db::ir::Inst;
 use lf_types::{Comm, Level, Side, SideMatch};
 
-use crate::{
-  iterators::{connectioniterator::iterator_new, nesting::Nesting},
-  rtor::{DeferredNotifys, InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface, RtorN},
+use crate::rtor::{
+  DeferredNotifys, InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface, RtorN,
 };
 
 use super::{util::require_empty, FixpointingStatus};

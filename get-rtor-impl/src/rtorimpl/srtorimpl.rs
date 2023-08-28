@@ -6,13 +6,13 @@ use std::{
 };
 
 use crate::{
-  iterators::{
-    connectioniterator::ConnectionIterator,
-    map::{map, pmap},
-    nesting::Nesting,
-  },
   rtor::{ComptimeInput, DeferredNotifys, FuzzySideIterator, Inputs, ProvidingInputsIface, RtorN},
   Db,
+};
+use connectioniterator::{
+  chainclone::ChainClone,
+  map::{map, pmap},
+  nesting::Nesting,
 };
 use irlf_db::ir::{Inst, InstRef, StructlikeCtor};
 use lf_types::{Comm, FlowDirection, Level, Side, SideMatch};
@@ -22,7 +22,6 @@ use crate::rtor::{InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface};
 use closure::closure;
 
 use super::{iface_of, FixpointingStatus};
-use crate::iterators::chainclone::ChainClone;
 
 // dyn_clone::clone_trait_object!(ChainClone<Level, dyn LevelIterator<Item = Level>>);
 // impl ConnectionIterator<Level> for ChainClone<Level, Box<dyn ConnectionIterator<Level>>> {}

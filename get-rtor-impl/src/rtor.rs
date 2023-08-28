@@ -1,18 +1,15 @@
+use connectioniterator::{
+  nesting::{Nesting, NestingStack},
+  ConnectionIterator, ProvidingConnectionIterator,
+};
 use dyn_clone::DynClone;
 use irlf_db::ir::Inst;
 use lf_types::{Comm, FlowDirection, Level, Net, Side, SideMatch};
-use std::{any::Any, collections::HashSet, marker::PhantomData, rc::Rc};
+use std::{any::Any, collections::HashSet, rc::Rc};
 
 pub type RtorN = Box<dyn RtorIface>;
 
-use crate::{
-  iterators::{
-    connectioniterator::{ConnectionIterator, ProvidingConnectionIterator},
-    nesting::{NBound, Nesting, NestingStack},
-  },
-  rtorimpl::FixpointingStatus,
-  Db,
-};
+use crate::{rtorimpl::FixpointingStatus, Db};
 pub type SetPort<'db> = Box<dyn Fn(&dyn Any) + 'db>;
 pub type Inputs<'a> = Box<dyn ConnectionIterator<'a, Item = SetPort<'a>, N = RtorN> + 'a>;
 
@@ -30,62 +27,6 @@ pub type ExactSideIterator<'a> =
   Box<dyn Iterator<Item = (Level, Comm<Box<dyn RtorIface + 'a>>)> + 'a>;
 
 pub type DeferredNotifys = HashSet<NestingStack<RtorN>>;
-
-pub struct EmptyIterator<'a, Item, N: NBound> {
-  nesting: Nesting<N>,
-  phantom: PhantomData<&'a Item>,
-}
-impl<'a, Item: 'static, N: NBound + 'a> EmptyIterator<'a, Item, N> {
-  pub fn new_dyn(
-    nesting: Nesting<N>,
-  ) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item, N = N> + 'a> {
-    Box::new(EmptyIterator {
-      nesting,
-      phantom: PhantomData,
-    })
-  }
-}
-impl<'a, Item, N: NBound> Clone for EmptyIterator<'a, Item, N> {
-  fn clone(&self) -> Self {
-    EmptyIterator {
-      nesting: self.nesting.clone(),
-      phantom: PhantomData,
-    }
-  }
-}
-impl<'a, Item, N: NBound> Iterator for EmptyIterator<'a, Item, N> {
-  type Item = Item;
-
-  fn next(&mut self) -> Option<Self::Item> {
-    None
-  }
-}
-
-impl<'a, Item, N: NBound> ConnectionIterator<'a> for EmptyIterator<'a, Item, N> {
-  type N = N;
-  fn current_nesting(&self) -> &Nesting<N> {
-    todo!()
-  }
-}
-
-impl<'a, Item, N: NBound> ProvidingConnectionIterator<'a> for EmptyIterator<'a, Item, N> {
-  fn finish(self: Box<Self>) -> Nesting<N> {
-    todo!()
-  }
-}
-// impl<'a, Item> BoxClone for EmptyIterator<'a, Item> {}
-// impl<'a> ConnectionIterator<ShareLevelLowerBound<'a>> for EmptyIterator<'a, ShareLevelLowerBound<'a>> {}
-// pub fn trivial_inputs_giver<'db>() -> Inputs<'db> {
-//   Box::new(EmptyIterator {
-//     phantom: PhantomData,
-//   })
-// }
-// pub fn trivial_inputs_iface_giver() -> InputsIface {
-//   let iterator = EmptyIterator::<IIEltE> {
-//     phantom: PhantomData,
-//   };
-//   Box::new(iterator)
-// }
 
 /// A runtime reactor instance.
 pub trait Rtor<'db> {

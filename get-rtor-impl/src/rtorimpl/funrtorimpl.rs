@@ -1,10 +1,11 @@
-use crate::iterators::connectioniterator::iterator_new;
-use crate::iterators::nesting::Nesting;
 use crate::rtor::{
-  DeferredNotifys, EmptyIterator, Inputs, InputsIface, LevelIterator, ProvidingInputsIface, Rtor,
-  RtorComptime, RtorIface, RtorN, SetPort,
+  DeferredNotifys, Inputs, InputsIface, LevelIterator, ProvidingInputsIface, Rtor, RtorComptime,
+  RtorIface, RtorN,
 };
 use crate::Db;
+use connectioniterator::emptyiterator::EmptyIterator;
+use connectioniterator::iterator_new;
+use connectioniterator::nesting::Nesting;
 use irlf_db::ir::Inst;
 use lf_types::{Comm, FlowDirection, Level, Net, Side, SideMatch};
 use std::any::TypeId;
