@@ -64,7 +64,9 @@ checksum = "d6173fd61b610d15a7566dd7b7620775627441c4ab9dac8906e17cb93a24b782"
 name = "connectioniterator"
 version = "0.1.0"
 dependencies = [
+ "closure",
  "dyn-clone",
+ "expect-test",
 ]
 
 [[package]]

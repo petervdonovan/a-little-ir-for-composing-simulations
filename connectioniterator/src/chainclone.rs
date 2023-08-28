@@ -13,7 +13,7 @@ pub trait IteratorGiver<'a, Item, N: NBound> =
 pub struct ChainClone<'a, Item, N: NBound, IG: IteratorGiver<'a, Item, N> + ?Sized> {
   backing_iters: Vec<Rc<IG>>,
   current: Box<dyn ProvidingConnectionIterator<'a, Item = Item, N = N> + 'a>,
-  pos: u32,
+  pos: i32,
 }
 
 impl<'a, Item: 'static, N: NBound + 'a, IG: IteratorGiver<'a, Item, N> + ?Sized>
@@ -24,7 +24,7 @@ impl<'a, Item: 'static, N: NBound + 'a, IG: IteratorGiver<'a, Item, N> + ?Sized>
     ChainClone {
       backing_iters,
       current: EmptyIterator::new_dyn(nesting),
-      pos: 0,
+      pos: -1,
     }
   }
 }
@@ -35,16 +35,11 @@ impl<'a, Item, N: NBound, IG: IteratorGiver<'a, Item, N> + ?Sized> Iterator
   type Item = Item;
 
   fn next(&mut self) -> Option<Self::Item> {
-    // let current = self
-    //   .current
-    //   .get_or_insert_with(|| (*self.backing_iters.get_mut(self.pos as usize)?)());
     if let Some(x) = self.current.next() {
       Some(x)
     } else if let Some(next_giver) = self.backing_iters.get((self.pos + 1) as usize) {
-      let moved = std::mem::replace(&mut self.current, next_giver(Nesting::default())); // FIXME: this is ugly
+      let moved = std::mem::replace(&mut self.current, next_giver(Nesting::default())); // FIXME: this is ugly and inefficient
       self.current = next_giver(moved.finish());
-      // let next = next_giver(self.current.finish());
-      // self.current = next;
       self.pos += 1;
       self.next()
     } else {

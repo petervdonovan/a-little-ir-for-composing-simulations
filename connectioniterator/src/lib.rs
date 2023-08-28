@@ -73,3 +73,30 @@ pub fn iterator_new<'a, Item: Clone + 'static, N: NBound + 'static>(
   nesting.start_producer(iface);
   Box::new(VecIterator { v, pos: 0, nesting })
 }
+
+#[cfg(test)]
+mod tests {
+  use std::rc::Rc;
+
+  use crate::{chainclone::ChainClone, iterator_new, nesting::Nesting};
+  use expect_test::expect;
+
+  #[test]
+  fn chain() {
+    let closure_giver = |i, v: Vec<String>| move |n| iterator_new(n, i, v.clone());
+    let stringify = |it: Vec<&str>| it.iter().map(|it| it.to_string()).collect();
+    let chain = ChainClone::new(
+      Nesting::default(),
+      99,
+      vec![
+        Rc::new(closure_giver(43, stringify(vec!["a", "b", "c"]))),
+        Rc::new(closure_giver(44, stringify(vec!["d", "e", "f"]))),
+        Rc::new(closure_giver(45, stringify(vec!["h", "i", "j"]))),
+        Rc::new(closure_giver(46, stringify(vec!["k", "l", "m"]))),
+      ],
+    );
+    let s = format!("{:?}", chain.collect::<Vec<_>>());
+    let expect = expect![[r#""#]];
+    expect.assert_eq(&s);
+  }
+}

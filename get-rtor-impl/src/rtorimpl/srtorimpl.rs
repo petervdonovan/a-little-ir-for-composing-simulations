@@ -345,14 +345,8 @@ impl RtorIface for SrtorIface {
           db,
           rest_or_empty(part),
           side,
-          // &mut map(
-          //   inputs_iface.clone(),
-          //   Rc::new(move |it| {
-          //     Rc::new(closure!(clone it, |level| it(level + starting_intrinsic_level)))
-          //   }),
-          // ),
           &mut map(
-            inputs_iface, // FIXME: super wrong. will not work
+            inputs_iface,
             Rc::new(move |it| {
               it.map(|it| {
                 // another case where the variable had to be factored out in order for it to type-check. Why?
