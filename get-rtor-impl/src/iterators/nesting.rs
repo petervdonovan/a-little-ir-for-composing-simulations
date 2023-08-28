@@ -1,14 +1,14 @@
-use crate::rtor::RtorIface;
+pub trait NBound = Clone;
 
 #[derive(Debug, Clone)]
-pub struct NestingStack(Vec<Box<dyn RtorIface>>);
+pub struct NestingStack<N: NBound>(Vec<N>);
 
 #[derive(Debug, Clone, Copy)]
 pub struct Cursor(usize);
 
 #[derive(Debug, Clone)]
-pub struct Nesting {
-  all: NestingStack,
+pub struct Nesting<N: NBound> {
+  all: NestingStack<N>,
   // invariant: cursors[0] == 0
   cursors: Vec<Cursor>,
 }
@@ -16,12 +16,12 @@ pub struct Nesting {
 // TODO: This is used as a placeholder to allow memory to be temporarily in an invalid state and it
 // seems very hacky and I do not think that it achieves the performance and static checking benefit
 // that is desired. All uses of it should be examined for sus-ness.
-pub const PLACEHOLDER: Nesting = Nesting {
-  all: NestingStack(vec![]),
-  cursors: vec![],
-};
+// pub const PLACEHOLDER: Nesting<N> = Nesting {
+//   all: NestingStack(vec![]),
+//   cursors: vec![],
+// };
 
-impl Default for Nesting {
+impl<N: NBound> Default for Nesting<N> {
   fn default() -> Self {
     Self {
       all: NestingStack(vec![]),
@@ -30,8 +30,8 @@ impl Default for Nesting {
   }
 }
 
-impl NestingStack {
-  pub fn active(&self, cursor: Cursor) -> Option<&[Box<dyn RtorIface>]> {
+impl<N: NBound> NestingStack<N> {
+  pub fn active(&self, cursor: Cursor) -> Option<&[N]> {
     if cursor.0 < self.0.len() {
       Some(&self.0[cursor.0..])
     } else {
@@ -40,8 +40,8 @@ impl NestingStack {
   }
 }
 
-impl Nesting {
-  pub fn active(&self) -> Option<&[Box<dyn RtorIface>]> {
+impl<N: NBound> Nesting<N> {
+  pub fn active(&self) -> Option<&[N]> {
     if let Some(cursor) = self.cursors.last() {
       self.all.active(*cursor)
     } else {
@@ -54,7 +54,7 @@ impl Nesting {
   pub fn stop_consumer(&mut self) {
     self.cursors.pop();
   }
-  pub fn start_producer(&mut self, producer: Box<dyn RtorIface>) {
+  pub fn start_producer(&mut self, producer: N) {
     self.all.0.push(producer);
   }
   pub fn stop_producer(&mut self) {

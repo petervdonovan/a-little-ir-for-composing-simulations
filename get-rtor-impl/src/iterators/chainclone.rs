@@ -4,30 +4,28 @@ use crate::rtor::{EmptyIterator, RtorIface};
 
 use super::{
   connectioniterator::{ConnectionIterator, ProvidingConnectionIterator},
-  nesting::{Nesting, PLACEHOLDER},
+  nesting::{NBound, Nesting},
 };
 
 pub struct ChainClone<
   'a,
   Item,
-  IteratorGiver: Fn(Nesting) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
+  N: NBound,
+  IteratorGiver: Fn(Nesting<N>) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item, N = N> + 'a> + ?Sized,
 > {
   backing_iters: Vec<Rc<IteratorGiver>>,
-  current: Box<dyn ProvidingConnectionIterator<'a, Item = Item> + 'a>,
+  current: Box<dyn ProvidingConnectionIterator<'a, Item = Item, N = N> + 'a>,
   pos: u32,
 }
 
 impl<
     'a,
     Item: 'static,
-    IteratorGiver: Fn(Nesting) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
-  > ChainClone<'a, Item, IteratorGiver>
+    N: NBound + 'a,
+    IteratorGiver: Fn(Nesting<N>) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item, N = N> + 'a> + ?Sized,
+  > ChainClone<'a, Item, N, IteratorGiver>
 {
-  pub fn new(
-    mut nesting: Nesting,
-    iface: Box<dyn RtorIface>,
-    backing_iters: Vec<Rc<IteratorGiver>>,
-  ) -> Self {
+  pub fn new(mut nesting: Nesting<N>, iface: N, backing_iters: Vec<Rc<IteratorGiver>>) -> Self {
     nesting.start_producer(iface);
     ChainClone {
       backing_iters,
@@ -40,8 +38,9 @@ impl<
 impl<
     'a,
     Item,
-    IteratorGiver: Fn(Nesting) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
-  > Iterator for ChainClone<'a, Item, IteratorGiver>
+    N: NBound,
+    IteratorGiver: Fn(Nesting<N>) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item, N = N> + 'a> + ?Sized,
+  > Iterator for ChainClone<'a, Item, N, IteratorGiver>
 {
   type Item = Item;
 
@@ -52,7 +51,7 @@ impl<
     if let Some(x) = self.current.next() {
       Some(x)
     } else if let Some(next_giver) = self.backing_iters.get((self.pos + 1) as usize) {
-      let moved = std::mem::replace(&mut self.current, next_giver(PLACEHOLDER));
+      let moved = std::mem::replace(&mut self.current, next_giver(Nesting::default())); // FIXME: this is ugly
       self.current = next_giver(moved.finish());
       // let next = next_giver(self.current.finish());
       // self.current = next;
@@ -67,8 +66,9 @@ impl<
 impl<
     'a,
     Item,
-    IteratorGiver: Fn(Nesting) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
-  > Clone for ChainClone<'a, Item, IteratorGiver>
+    N: NBound,
+    IteratorGiver: Fn(Nesting<N>) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item, N = N> + 'a> + ?Sized,
+  > Clone for ChainClone<'a, Item, N, IteratorGiver>
 {
   fn clone(&self) -> Self {
     ChainClone {
@@ -82,10 +82,12 @@ impl<
 impl<
     'a,
     Item,
-    BackingIterator: Fn(Nesting) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
-  > ConnectionIterator<'a> for ChainClone<'a, Item, BackingIterator>
+    N: NBound,
+    BackingIterator: Fn(Nesting<N>) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item, N = N> + 'a> + ?Sized,
+  > ConnectionIterator<'a> for ChainClone<'a, Item, N, BackingIterator>
 {
-  fn current_nesting(&self) -> &Nesting {
+  type N = N;
+  fn current_nesting(&self) -> &Nesting<N> {
     todo!()
   }
 }
@@ -93,10 +95,11 @@ impl<
 impl<
     'a,
     Item,
-    BackingIterator: Fn(Nesting) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item> + 'a> + ?Sized,
-  > ProvidingConnectionIterator<'a> for ChainClone<'a, Item, BackingIterator>
+    N: NBound,
+    BackingIterator: Fn(Nesting<N>) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item, N = N> + 'a> + ?Sized,
+  > ProvidingConnectionIterator<'a> for ChainClone<'a, Item, N, BackingIterator>
 {
-  fn finish(self: Box<Self>) -> Nesting {
+  fn finish(self: Box<Self>) -> Nesting<N> {
     todo!()
   }
 }

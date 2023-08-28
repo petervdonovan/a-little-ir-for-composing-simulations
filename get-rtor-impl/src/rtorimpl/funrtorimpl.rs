@@ -2,7 +2,7 @@ use crate::iterators::connectioniterator::iterator_new;
 use crate::iterators::nesting::Nesting;
 use crate::rtor::{
   DeferredNotifys, EmptyIterator, Inputs, InputsIface, LevelIterator, ProvidingInputsIface, Rtor,
-  RtorComptime, RtorIface, SetPort,
+  RtorComptime, RtorIface, RtorN, SetPort,
 };
 use crate::Db;
 use irlf_db::ir::Inst;
@@ -59,7 +59,7 @@ impl<'db> Rtor<'db> for FunRtor<'db> {
     }
   }
 
-  fn provide(&'db self, side: Side, nesting: Nesting) -> Inputs<'db> {
+  fn provide(&'db self, side: Side, nesting: Nesting<RtorN>) -> Inputs<'db> {
     // if let Side::Right = side {
     //   return EmptyIterator::new(nesting);
     // }
@@ -103,7 +103,12 @@ impl<'a> RtorComptime<'a> for FunRtorComptime<'a> {
       inputs.next(); // ! This assumes that the width of self is 1 !
     }
   }
-  fn provide(&self, part: &[Inst], side: Side, nesting: Nesting) -> ProvidingInputsIface<'a> {
+  fn provide(
+    &self,
+    part: &[Inst],
+    side: Side,
+    nesting: Nesting<RtorN>,
+  ) -> ProvidingInputsIface<'a> {
     require_empty(part);
     // trivial_inputs_iface_giver()
     if let Side::Right = side {
@@ -170,7 +175,7 @@ impl RtorIface for FunRtorIface {
     _part: &[Inst],
     _side: Side,
     starting_level: Level,
-    nesting: Nesting,
+    nesting: Nesting<RtorN>,
   ) -> LevelIterator<'db> {
     iterator_new(
       nesting,

@@ -11,7 +11,7 @@ use lf_types::{Comm, Level, Side, SideMatch};
 
 use crate::{
   iterators::{connectioniterator::iterator_new, nesting::Nesting},
-  rtor::{DeferredNotifys, InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface},
+  rtor::{DeferredNotifys, InputsIface, LevelIterator, Rtor, RtorComptime, RtorIface, RtorN},
 };
 
 use super::{util::require_empty, FixpointingStatus};
@@ -84,7 +84,7 @@ impl RtorIface for BiFunRtorIface {
     part: &[Inst],
     side: Side,
     starting_level: Level,
-    nesting: Nesting,
+    nesting: Nesting<RtorN>,
   ) -> LevelIterator<'db> {
     require_empty(part);
     let ret = match side {

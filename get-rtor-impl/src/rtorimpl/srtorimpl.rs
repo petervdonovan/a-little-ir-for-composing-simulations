@@ -11,7 +11,7 @@ use crate::{
     map::{map, pmap},
     nesting::Nesting,
   },
-  rtor::{ComptimeInput, DeferredNotifys, FuzzySideIterator, Inputs, ProvidingInputsIface},
+  rtor::{ComptimeInput, DeferredNotifys, FuzzySideIterator, Inputs, ProvidingInputsIface, RtorN},
   Db,
 };
 use irlf_db::ir::{Inst, InstRef, StructlikeCtor};
@@ -97,7 +97,7 @@ impl<'db> Rtor<'db> for Srtor<'db> {
     todo!()
   }
 
-  fn provide(&'db self, side: lf_types::Side, nesting: Nesting) -> crate::rtor::Inputs<'db> {
+  fn provide(&'db self, side: lf_types::Side, nesting: Nesting<RtorN>) -> crate::rtor::Inputs<'db> {
     todo!()
   }
 
@@ -286,7 +286,7 @@ impl<'a> RtorComptime<'a> for SrtorComptime<'a> {
     &self,
     part: &[Inst],
     side: lf_types::Side,
-    nesting: Nesting,
+    nesting: Nesting<RtorN>,
   ) -> ProvidingInputsIface<'a> {
     let mymap = Rc::clone(&self.levels_internal2external);
     let f = Rc::new(move |intrinsic_level: Comm<Level>| {
@@ -384,9 +384,9 @@ impl RtorIface for SrtorIface {
     part: &[Inst],
     side: Side,
     starting_level: Level,
-    nesting: Nesting,
+    nesting: Nesting<RtorN>,
   ) -> LevelIterator<'db> {
-    let mut sub_iterators: Vec<Rc<dyn Fn(Nesting) -> LevelIterator<'db> + 'db>> = vec![];
+    let mut sub_iterators: Vec<Rc<dyn Fn(Nesting<RtorN>) -> LevelIterator<'db> + 'db>> = vec![];
     let rc_part = Rc::new(part.to_vec());
     for (starting_intrinsic_level, iface) in self.side_exact(db, side, part) {
       match iface {
