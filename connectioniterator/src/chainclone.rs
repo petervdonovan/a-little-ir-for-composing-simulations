@@ -7,25 +7,19 @@ use super::{
   nesting::{NBound, Nesting},
 };
 
-pub struct ChainClone<
-  'a,
-  Item,
-  N: NBound,
-  IteratorGiver: Fn(Nesting<N>) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item, N = N> + 'a> + ?Sized,
-> {
-  backing_iters: Vec<Rc<IteratorGiver>>,
+pub trait IteratorGiver<'a, Item, N: NBound> =
+  Fn(Nesting<N>) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item, N = N> + 'a>;
+
+pub struct ChainClone<'a, Item, N: NBound, IG: IteratorGiver<'a, Item, N> + ?Sized> {
+  backing_iters: Vec<Rc<IG>>,
   current: Box<dyn ProvidingConnectionIterator<'a, Item = Item, N = N> + 'a>,
   pos: u32,
 }
 
-impl<
-    'a,
-    Item: 'static,
-    N: NBound + 'a,
-    IteratorGiver: Fn(Nesting<N>) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item, N = N> + 'a> + ?Sized,
-  > ChainClone<'a, Item, N, IteratorGiver>
+impl<'a, Item: 'static, N: NBound + 'a, IG: IteratorGiver<'a, Item, N> + ?Sized>
+  ChainClone<'a, Item, N, IG>
 {
-  pub fn new(mut nesting: Nesting<N>, iface: N, backing_iters: Vec<Rc<IteratorGiver>>) -> Self {
+  pub fn new(mut nesting: Nesting<N>, iface: N, backing_iters: Vec<Rc<IG>>) -> Self {
     nesting.start_producer(iface);
     ChainClone {
       backing_iters,
@@ -35,12 +29,8 @@ impl<
   }
 }
 
-impl<
-    'a,
-    Item,
-    N: NBound,
-    IteratorGiver: Fn(Nesting<N>) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item, N = N> + 'a> + ?Sized,
-  > Iterator for ChainClone<'a, Item, N, IteratorGiver>
+impl<'a, Item, N: NBound, IG: IteratorGiver<'a, Item, N> + ?Sized> Iterator
+  for ChainClone<'a, Item, N, IG>
 {
   type Item = Item;
 
@@ -63,12 +53,8 @@ impl<
   }
 }
 
-impl<
-    'a,
-    Item,
-    N: NBound,
-    IteratorGiver: Fn(Nesting<N>) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item, N = N> + 'a> + ?Sized,
-  > Clone for ChainClone<'a, Item, N, IteratorGiver>
+impl<'a, Item, N: NBound, IG: IteratorGiver<'a, Item, N> + ?Sized> Clone
+  for ChainClone<'a, Item, N, IG>
 {
   fn clone(&self) -> Self {
     ChainClone {
@@ -79,12 +65,8 @@ impl<
   }
 }
 
-impl<
-    'a,
-    Item,
-    N: NBound,
-    BackingIterator: Fn(Nesting<N>) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item, N = N> + 'a> + ?Sized,
-  > ConnectionIterator<'a> for ChainClone<'a, Item, N, BackingIterator>
+impl<'a, Item, N: NBound, BackingIterator: IteratorGiver<'a, Item, N> + ?Sized>
+  ConnectionIterator<'a> for ChainClone<'a, Item, N, BackingIterator>
 {
   type N = N;
   fn current_nesting(&self) -> &Nesting<N> {
@@ -92,12 +74,8 @@ impl<
   }
 }
 
-impl<
-    'a,
-    Item,
-    N: NBound,
-    BackingIterator: Fn(Nesting<N>) -> Box<dyn ProvidingConnectionIterator<'a, Item = Item, N = N> + 'a> + ?Sized,
-  > ProvidingConnectionIterator<'a> for ChainClone<'a, Item, N, BackingIterator>
+impl<'a, Item, N: NBound, BackingIterator: IteratorGiver<'a, Item, N> + ?Sized>
+  ProvidingConnectionIterator<'a> for ChainClone<'a, Item, N, BackingIterator>
 {
   fn finish(self: Box<Self>) -> Nesting<N> {
     todo!()

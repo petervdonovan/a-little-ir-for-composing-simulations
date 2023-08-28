@@ -12,18 +12,17 @@ use dyn_clone::DynClone;
 use crate::nesting::{NBound, Nesting};
 
 pub trait ProvidingConnectionIterator<'a>: ConnectionIterator<'a> {
-  // Marks the termination of the iteration over `self` and returns the resulting Nesting.
+  /// Marks the termination of the iteration over `self` and returns the resulting Nesting.
   fn finish(self: Box<Self>) -> Nesting<Self::N>;
 }
 
 pub trait ConnectionIterator<'a>: Iterator + DynClone {
   type N: NBound;
-  // Returns the nesting corresponding to the latest output of self, or the initial nesting
-  // otherwise.
+  /// Returns the nesting corresponding to the latest output of self, or the initial nesting
+  /// otherwise.
   fn current_nesting(&self) -> &Nesting<Self::N>;
 }
 
-// dyn_clone::clone_trait_object!(ConnectionIterator<Item = u32>);
 impl<'a, Item, N: NBound> Clone for Box<dyn ConnectionIterator<'a, Item = Item, N = N> + 'a> {
   fn clone(&self) -> Self {
     dyn_clone::clone_box(&**self)

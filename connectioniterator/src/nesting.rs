@@ -13,14 +13,6 @@ pub struct Nesting<N: NBound> {
   cursors: Vec<Cursor>,
 }
 
-// TODO: This is used as a placeholder to allow memory to be temporarily in an invalid state and it
-// seems very hacky and I do not think that it achieves the performance and static checking benefit
-// that is desired. All uses of it should be examined for sus-ness.
-// pub const PLACEHOLDER: Nesting<N> = Nesting {
-//   all: NestingStack(vec![]),
-//   cursors: vec![],
-// };
-
 impl<N: NBound> Default for Nesting<N> {
   fn default() -> Self {
     Self {

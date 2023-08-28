@@ -37,12 +37,12 @@ impl<'a, Item, N: NBound> Iterator for EmptyIterator<'a, Item, N> {
 impl<'a, Item, N: NBound> ConnectionIterator<'a> for EmptyIterator<'a, Item, N> {
   type N = N;
   fn current_nesting(&self) -> &Nesting<N> {
-    todo!()
+    &self.nesting
   }
 }
 
 impl<'a, Item, N: NBound> ProvidingConnectionIterator<'a> for EmptyIterator<'a, Item, N> {
   fn finish(self: Box<Self>) -> Nesting<N> {
-    todo!()
+    self.nesting
   }
 }
